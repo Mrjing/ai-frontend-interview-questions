@@ -1,0 +1,27 @@
+# 用户隐私数据（含简历、面试题、面试纪要）
+articles/
+
+# 内部记忆与工作目录
+.workbuddy/
+
+# 临时文件
+tmall_article.png
+*.tmp
+.DS_Store
+
+# IDE 配置
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node.js
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Playwright CLI 日志
+.playwright-cli/
