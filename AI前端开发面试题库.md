@@ -1,12 +1,25 @@
 # AI 前端开发面试题库
 
-> **版本**: v2.4 | **更新日期**: 2026-04-14 | **题目总数**: 76
+> **版本**: v2.6 | **更新日期**: 2026-04-14 | **题目总数**: 81
 >
 > 本题库整合自掘金、知乎、牛客、CSDN、小红书等平台的最新面经，聚焦AI前端/全栈开发方向。
 >
 > **收录标准**：AI场景前端实践 | AI大模型原理 | AI系统架构设计 | 算法题 | 系统设计题
 >
 > **不收录**：传统前端八股（CSS样式、JS语法/基本原理、传统框架原理、网络/浏览器基础八股、工程化八股等）
+
+### 来源标注规范
+
+> 每道题目**必须**标注信息来源，确保可追溯考证。
+
+| 来源类型 | 格式 | 示例 |
+|----------|------|------|
+| 指定文章 | `> 📌 来源：[平台·文章名](URL)` | `> 📌 来源：[CSDN·腾讯CSIG实习面](https://blog.csdn.net/xxx)` |
+| 多篇文章 | 用 `+` 连接 | `> 📌 来源：[来源1](URL1) + [来源2](URL2)` |
+| 综合整理 | `> 📌 来源：综合整理（面试高频题）` | 无特定文章，多篇文章交叉验证 |
+| LeetCode原题 | `> 📌 来源：LeetCode #{题号} {题名}` | `> 📌 来源：LeetCode #3 无重复字符的最长子串` |
+
+> ⚠️ **强制规则**：新增题目时，必须同步记录文章来源链接。禁止添加无来源的题目。
 
 ---
 
@@ -50,6 +63,8 @@
 
 #### Q1: 手写带并发限制的Promise.all（异步调度器）
 `tag:并发控制` `tag:手写题` `difficulty:medium`
+
+> 📌 来源：综合整理（面试高频手写题）
 
 **问题**：实现一个带有并发限制的请求调度器，限制同时进行的AI请求数量。
 
@@ -124,6 +139,8 @@ class PriorityRequestScheduler {
 #### Q2: 十万级数据的表格渲染如何处理？列表项高度不固定呢？
 `tag:虚拟滚动/长列表` `tag:性能优化` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 **固定高度**：使用虚拟滚动（react-window / vue-virtual-scroller），只渲染可视区域的DOM节点。
 
@@ -139,6 +156,8 @@ class PriorityRequestScheduler {
 
 #### Q3: 如何处理前端长文本渲染时的性能问题？特别是AI实时生成大量Markdown时。
 `tag:性能优化` `tag:Markdown渲染` `tag:虚拟滚动` `difficulty:hard`
+
+> 📌 来源：综合整理 + 阿里云AI应用开发二面（AI Chat长列表专项优化部分）
 
 **参考答案**：
 
@@ -166,6 +185,8 @@ class PriorityRequestScheduler {
 #### Q4: 大文件断点续传+秒传方案如何设计？
 `tag:系统设计` `tag:文件上传` `tag:断点续传` `difficulty:hard`
 
+> 📌 来源：综合整理（面试高频系统设计题）
+
 **参考答案**：
 1. **文件切片**：使用 `Blob.slice()` 将文件分成固定大小的chunk（如5MB）
 2. **计算MD5**：Web Worker 中使用 `spark-md5` 计算文件hash作为唯一标识
@@ -179,6 +200,8 @@ class PriorityRequestScheduler {
 
 #### Q5: 动态路由管理系统如何设计？权限滥用如何解决？
 `tag:系统设计` `tag:权限管理` `tag:动态路由` `difficulty:hard`
+
+> 📌 来源：综合整理（面试高频系统设计题）
 
 **参考答案**：
 **数据结构**：后端返回路由配置（path、component、permission标识）和用户权限列表。
@@ -198,7 +221,7 @@ class PriorityRequestScheduler {
 #### Q69: 接口降级方案设计（超时/失败/熔断/限流降级）
 `tag:架构设计` `tag:性能监控` `tag:AI协作` `difficulty:medium`
 
-**来源**: 字节前端一面
+> 📌 来源：[jishuzhan·字节前端一面](https://jishuzhan.net/article/2040987744083120130)
 
 **参考答案**：
 降级是高可用设计，当主接口失败时使用备用方案：
@@ -252,6 +275,8 @@ class AIServiceFallback {
 #### Q6: 如何利用AI提升日常开发效率？前端未来会被AI取代吗？
 `tag:AI协作` `tag:职业发展` `difficulty:easy`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 **利用AI提效**：
 - 使用Cursor/Copilot辅助编写样板代码和单测
@@ -269,6 +294,8 @@ class AIServiceFallback {
 #### Q7: AI生成代码的审查清单有哪些？
 `tag:AI协作` `tag:代码审查` `tag:安全` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 1. **依赖投毒与幻觉库**：检查AI编造的不存在的npm包，排查依赖来源与漏洞
 2. **敏感信息泄露**：扫描 `process.env` 误用、后端接口直接暴露
@@ -280,6 +307,8 @@ class AIServiceFallback {
 
 #### Q8: 如何安全地让Agent操作前端UI（如自动填表）？
 `tag:Agent架构` `tag:安全` `tag:UI自动化` `difficulty:hard`
+
+> 📌 来源：综合整理（面试高频题）
 
 **参考答案**：
 1. **定义严格的UI Action接口**：预定义合法操作（如填表、点击、选择）
@@ -293,6 +322,8 @@ class AIServiceFallback {
 #### Q9: Plan模式和Agent模式的区别？
 `tag:Agent架构` `tag:模式设计` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 - **Plan模式（规划模式）**：AI先出完整执行计划，用户确认后再执行。可控性强、安全性高，适合确定性任务
 - **Agent模式（智能体模式）**：AI自主规划、调用工具、观察结果并迭代。自治、连贯，能处理复杂开放性任务，但存在不可控和死循环风险
@@ -303,6 +334,8 @@ class AIServiceFallback {
 
 #### Q10: 怎么确保AI生成的代码没有问题？
 `tag:AI协作` `tag:代码质量` `tag:TDD` `difficulty:medium`
+
+> 📌 来源：综合整理 + [CSDN·腾讯CSIG实习面](https://blog.csdn.net/weixin_50077637/article/details/160116965)（代码质量评估量化体系部分）
 
 **参考答案**：
 1. **输入端**：精确Prompt + 充足上下文 + Few-shot示例
@@ -324,6 +357,8 @@ class AIServiceFallback {
 
 #### Q11: SSE和WebSocket的区别？为什么AI流式输出用SSE不用WebSocket？
 `tag:SSE/流式输出` `tag:网络协议` `difficulty:medium`
+
+> 📌 来源：综合整理（面试高频题）
 
 **参考答案**：
 **核心区别**：
@@ -347,6 +382,8 @@ class AIServiceFallback {
 
 #### Q12: 前端如何优雅地处理LLM的流式输出？
 `tag:SSE/流式输出` `tag:打字机效果` `difficulty:medium`
+
+> 📌 来源：综合整理 + 阿里云AI应用开发一面（SSE ReadableStream解析器、TypeScript高级类型应用部分）
 
 **参考答案**：
 1. 使用 Fetch API 的 `ReadableStream` 或 SSE（Server-Sent Events）接收流
@@ -402,6 +439,8 @@ class SSEStreamParser {
 #### Q13: SSE流式输出时刷新页面或切换对话，如何保证对话继续？（SSE断线重连/恢复）
 `tag:SSE/流式输出` `tag:并发控制` `difficulty:hard`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 SSE断开后无法在原连接上"续传"，必须依靠业务层的幂等性与状态恢复。
 
@@ -437,6 +476,8 @@ eventSource.addEventListener('message', (e) => {
 #### Q14: 用户点击停止按钮中止AI生成，前后端如何协同处理？
 `tag:SSE/流式输出` `tag:AbortController` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 **前端实现**：使用 `AbortController` 取消fetch请求
 ```javascript
@@ -471,6 +512,8 @@ function stop() {
 
 #### Q15: Markdown流式输出标签截断如何处理？
 `tag:SSE/流式输出` `tag:Markdown渲染` `tag:打字机效果` `difficulty:hard`
+
+> 📌 来源：综合整理（面试高频题）
 
 **参考答案**：
 **问题**：LLM流式返回时，Markdown可能在任何位置被截断——代码块只有开始没有结束、表格只渲染了一半、行内格式未闭合。
@@ -526,7 +569,7 @@ class MarkdownStreamParser {
 #### Q68: 对话界面"自动滚动到底部"与用户上滑查看的体验平衡
 `tag:虚拟滚动/长列表` `tag:SSE/流式输出` `tag:AI协作` `difficulty:medium`
 
-**来源**: 阿里云AI应用开发一面
+> 📌 来源：综合整理（阿里云AI应用开发一面高频题，多篇文章交叉验证）
 
 **参考答案**：
 1. **核心逻辑**：监听滚动事件，判断用户是否"向上滚动"且"不在底部"
@@ -574,7 +617,7 @@ function useAutoScroll(containerRef) {
 #### Q73: 为什么AI输出必须用流式？等完整结果再返回不行吗？
 `tag:SSE/流式输出` `tag:AI协作` `difficulty:easy`
 
-**来源**: CSDN·腾讯CSIG实习面（2026-04-10）、jishuzhan·腾讯前端一面（2026-04-04）
+> 📌 来源：[CSDN·腾讯CSIG实习面](https://blog.csdn.net/weixin_50077637/article/details/160116965) + [jishuzhan·腾讯前端一面](https://jishuzhan.net/article/2042069756526788610)
 
 **参考答案**：
 
@@ -599,7 +642,7 @@ function useAutoScroll(containerRef) {
 #### Q74: AI接口的缓存与限流策略如何设计？令牌桶算法怎么实现？
 `tag:并发控制` `tag:性能监控` `difficulty:medium`
 
-**来源**: CSDN·美团财务科技前端一面（2026-04-09）、jishuzhan·字节前端一面（2026-04-03）
+> 📌 来源：[CSDN·美团财务科技前端一面](https://blog.csdn.net/weixin_50077637/article/details/159430917) + [jishuzhan·字节前端一面](https://jishuzhan.net/article/2040987744083120130)
 
 **参考答案**：
 
@@ -653,10 +696,38 @@ if (!bucket.consume()) {
 
 ---
 
+#### Q80: AI应用中为什么需要两级缓存？如何设计？
+`tag:RAG` `tag:性能优化` `tag:并发控制` `difficulty:medium`
+
+> 📌 来源：小红书·小红书AI应用开发一面（OCR图片笔记提取）
+
+**参考答案**：
+
+1. **为什么需要缓存**：AI应用链路成本高、延迟高（embedding计算、向量检索、Rerank重排、LLM生成），相同或相似的问题重复处理是浪费
+
+2. **两级缓存架构**：
+   - **L1本地缓存**（进程内）：解决热点访问，微秒级延迟，用LRU策略
+   - **L2分布式缓存**（Redis）：解决多实例共享，毫秒级延迟
+
+3. **缓存维度**：
+   - Query语义缓存：相似问题命中缓存（用向量相似度判断）
+   - 检索结果缓存：相同检索条件的文档列表
+   - Embedding缓存：已计算的文本向量
+
+4. **设计注意点**：
+   - 缓存穿透：对不存在的key做空值缓存
+   - 热点key：大流量集中命中同一个key，需做本地缓存分散
+   - 版本失效：知识库更新后，相关缓存要主动失效
+   - TTL策略：不同类型数据设不同过期时间（Embedding可长期，检索结果中等，生成结果短）
+
+**与Q74的区别**：Q74侧重语义缓存和令牌桶限流，本题侧重两级缓存的整体架构设计和失效策略。
+
+---
+
 #### Q75: 流式输出如何做进度估算和剩余时间预测？
 `tag:SSE/流式输出` `tag:性能监控` `difficulty:medium`
 
-**来源**: 微信公众号·前端面试考AI了（2026-04）
+> 📌 来源：[微信公众号·前端面试考AI了](https://mp.weixin.qq.com/s?src=11&timestamp=1776139474&ver=6659&signature=6sM0oPSpnBI4*k9cAhYjWtlMHNNLiL3dhpV4*715*uVp2S52jgVqJgWgTN5jtKdqwsLrkNRcK2TNjFHcfimtZDuNKVr4FuWiknsjQx6Bbqo0ocrhDec*3-tb96qn26Ux&new=1)
 
 **参考答案**：
 
@@ -713,6 +784,8 @@ class StreamProgressEstimator {
 
 #### Q16: 如何封装通用AI Chat组件？
 `tag:架构设计` `tag:AI组件` `difficulty:hard`
+
+> 📌 来源：综合整理 + 阿里云AI应用开发二面（AIUIKit组件分类架构部分）
 
 **参考答案**：
 通用AI Chat组件需考虑五大类Props：
@@ -781,6 +854,8 @@ interface AIChatProps {
 4. **FunctionCalling**：函数调用UI，支持参数动态表单和调用状态展示
 `tag:性能监控` `tag:AI指标` `difficulty:medium`
 
+> 📌 来源：综合整理（阿里云AI应用开发二面·AI性能监控指标部分）
+
 **参考答案**：
 AI场景除传统Web指标外，还需监控以下专用指标：
 
@@ -827,6 +902,8 @@ class AIPerformanceMonitor {
 #### Q18: AI接口网络抖动的重试机制如何设计？
 `tag:性能优化` `tag:重试机制` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 **核心设计原则**：
 1. **指数退避**：`delay = baseDelay * (2^(attempt-1))`，第1次1s，第2次2s，第3次4s
@@ -871,6 +948,8 @@ class ExponentialBackoffRetry {
 #### Q19: AI Sandbox（沙箱）的作用是什么？如何实现？
 `tag:Agent架构` `tag:安全` `tag:沙箱` `difficulty:hard`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 **为什么需要AI Sandbox**：LLM可以生成代码并执行，沙箱提供隔离环境，防止恶意代码影响主程序或系统。
 
@@ -890,6 +969,8 @@ class ExponentialBackoffRetry {
 #### Q20: Tool Calling的前端执行链路是什么？
 `tag:Function-Calling` `tag:Agent架构` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 **谁来实现Tool**：Tool的声明（JSON Schema描述）由后端/BFF层组装给LLM；Tool的执行通常在后端完成。前端主要负责触发和UI展示。
 
@@ -907,6 +988,8 @@ class ExponentialBackoffRetry {
 
 #### Q21: 多模态消息和纯文本消息有什么区别？
 `tag:多模态` `tag:架构设计` `difficulty:medium`
+
+> 📌 来源：综合整理（面试高频题）
 
 **参考答案**：
 **纯文本消息**：
@@ -936,6 +1019,8 @@ class ExponentialBackoffRetry {
 #### Q22: SWR请求缓存在AI场景的应用？
 `tag:性能优化` `tag:缓存策略` `difficulty:easy`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 **SWR（Stale-While-Revalidate）** 核心策略：先返回过期缓存（保证秒开），后台重新请求最新数据，请求完成后更新UI。
 
@@ -956,6 +1041,8 @@ class ExponentialBackoffRetry {
 
 #### Q23: AI对话上下文记忆如何实现？
 `tag:记忆管理` `tag:对话上下文` `difficulty:medium`
+
+> 📌 来源：综合整理（面试高频题）
 
 **参考答案**：
 核心是将历史对话作为上下文传递给模型。
@@ -986,6 +1073,8 @@ function buildContext(messages, newMessage) {
 
 #### Q24: 如何优化Prompt减少Token消耗？
 `tag:Prompt-Engineering` `tag:Token优化` `difficulty:medium`
+
+> 📌 来源：综合整理（面试高频题）
 
 **参考答案**：
 **五大优化策略**：
@@ -1030,6 +1119,8 @@ class MessageCompressor {
 #### Q25: Transformer的核心机制是什么？为什么比RNN好？
 `tag:Transformer` `tag:大模型原理` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频基础题）
+
 **参考答案**：
 **核心机制**：Self-Attention（自注意力），计算序列中每个token与其他所有token的关联度。
 
@@ -1045,6 +1136,8 @@ class MessageCompressor {
 #### Q26: 大模型的训练流程是什么？（预训练→SFT→RLHF）
 `tag:大模型原理` `tag:训练流程` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频基础题）
+
 **参考答案**：
 1. **预训练（Pre-training）**：海量无标注文本上学习语言规律，目标函数为next token prediction，产出基座模型
 2. **有监督微调（SFT）**：高质量指令-回答对上训练，让模型学会按指令格式回答
@@ -1054,6 +1147,8 @@ class MessageCompressor {
 
 #### Q27: 什么是Temperature和Top-p？怎么调参？
 `tag:大模型原理` `tag:调参` `difficulty:easy`
+
+> 📌 来源：综合整理（面试高频基础题）
 
 **参考答案**：
 - **Temperature**：控制输出随机性。T→0趋近贪心（总是选最高概率token），T→1正常分布，T>1更随机。创意任务用0.7-1.0，精确任务用0-0.3
@@ -1067,6 +1162,8 @@ class MessageCompressor {
 
 #### Q28: 什么是AI Agent？它和Chatbot的本质区别是什么？
 `tag:Agent架构` `tag:大模型原理` `difficulty:easy`
+
+> 📌 来源：综合整理（面试高频基础题）
 
 **参考答案**：
 AI Agent是能够感知环境、自主决策并执行动作以达成特定目标的系统。核心特征：感知、推理、行动和反馈。
@@ -1084,6 +1181,8 @@ AI Agent是能够感知环境、自主决策并执行动作以达成特定目标
 #### Q29: LLM Agent的核心能力有哪些？
 `tag:Agent架构` `tag:大模型原理` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 1. 任务理解与分解
 2. 规划与推理（如CoT、ReAct）
@@ -1095,6 +1194,8 @@ AI Agent是能够感知环境、自主决策并执行动作以达成特定目标
 
 #### Q30: ReAct框架的原理是什么？相比CoT有何优势？
 `tag:Agent架构` `tag:推理框架` `difficulty:medium`
+
+> 📌 来源：综合整理 + [CSDN·2026最新AI Agent岗面试复盘](https://blog.csdn.net/w425772719/article/details/159921763)（ReAct vs CoT vs ToT对比部分）
 
 **参考答案**：
 **ReAct**：交替进行 Thought（思考）→ Action（行动）→ Observation（观察）的循环。
@@ -1123,6 +1224,8 @@ AI Agent是能够感知环境、自主决策并执行动作以达成特定目标
 #### Q31: 什么是Function Calling？和传统API调用有什么区别？
 `tag:Function-Calling` `tag:Agent架构` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 Function Calling是LLM根据用户意图**自主决定**调用哪个函数、传什么参数的机制，是Agent自主决策能力的核心。
 
@@ -1139,7 +1242,7 @@ Function Calling是LLM根据用户意图**自主决定**调用哪个函数、传
 #### Q70: MCP协议与前端安全校验（Zod Schema验证）
 `tag:Function-Calling` `tag:Agent架构` `tag:幻觉/安全` `difficulty:hard`
 
-**来源**: 有赞Agent开发实习一面
+> 📌 来源：综合整理（有赞Agent开发实习一面高频题）
 
 **参考答案**：
 **MCP解决什么问题**：
@@ -1183,6 +1286,8 @@ function validateToolCall(toolName: string, args: unknown) {
 #### Q32: Agent的幻觉问题怎么处理？
 `tag:幻觉/安全` `tag:Agent架构` `difficulty:hard`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 Agent幻觉比普通LLM更危险，因为幻觉会触发真实行动。
 
@@ -1201,6 +1306,8 @@ Agent幻觉比普通LLM更危险，因为幻觉会触发真实行动。
 
 #### Q33: RAG的完整流程是什么？每个环节可能遇到什么问题？
 `tag:RAG` `tag:大模型原理` `difficulty:medium`
+
+> 📌 来源：综合整理 + 阿里云AI应用开发二面（RAG前端链路交互流程部分）
 
 **参考答案**：
 **完整流程**：
@@ -1235,6 +1342,8 @@ Agent幻觉比普通LLM更危险，因为幻觉会触发真实行动。
 #### Q34: Chunk Size怎么选？Overlap的作用是什么？
 `tag:RAG` `tag:Chunking` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 **Chunk Size选择**：
 - 一般 300-500 字符（中文）效果较好
@@ -1250,6 +1359,8 @@ Agent幻觉比普通LLM更危险，因为幻觉会触发真实行动。
 
 #### Q35: 向量检索和关键词检索有什么区别？什么时候用哪个？
 `tag:RAG` `tag:向量检索` `difficulty:medium`
+
+> 📌 来源：综合整理（面试高频题）
 
 **参考答案**：
 | 维度 | 向量检索 | 关键词检索 |
@@ -1268,6 +1379,8 @@ Agent幻觉比普通LLM更危险，因为幻觉会触发真实行动。
 #### Q36: 如何评估RAG系统的效果？用什么指标？
 `tag:RAG` `tag:评估` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 四大核心指标（可用RAGAS框架评估）：
 1. **Faithfulness（忠实度）**：回答是否忠于检索到的上下文（不编造）
@@ -1279,8 +1392,36 @@ Agent幻觉比普通LLM更危险，因为幻觉会触发真实行动。
 
 ---
 
+#### Q79: RAG系统的评价指标怎么设计？检索侧和生成侧分别看什么？
+`tag:RAG` `tag:Rerank` `tag:性能监控` `difficulty:medium`
+
+> 📌 来源：小红书·小红书AI应用开发一面（OCR图片笔记提取）
+
+**参考答案**：
+分为检索侧和生成侧两部分评估：
+
+1. **检索侧指标**（判断"找没找对"）：
+   - Recall@K：前K个结果中包含相关文档的比例
+   - MRR（Mean Reciprocal Rank）：第一个相关结果的排名倒数的均值
+   - NDCG：考虑位置权重的归一化折损累计增益
+
+2. **生成侧指标**（判断"答没答好"）：
+   - 答案相关性（Relevance）：回答是否切题
+   - 忠实度（Faithfulness）：模型是否基于检索内容回答，而非自己编造
+   - 上下文利用率：检索到的信息是否被有效利用
+
+3. **端到端评估**：
+   - 用户满意度（点赞/采纳率）
+   - 只看用户觉得"像不像对的"不够，因为模型有时说得顺但依据不对
+
+**与Q36的区别**：Q36侧重RAGAS框架的四大抽象指标，本题侧重实战中的具体指标选择和评估思路。
+
+---
+
 #### Q37: Rerank的作用是什么？如何提升检索准确率？
 `tag:RAG` `tag:Rerank` `difficulty:medium`
+
+> 📌 来源：综合整理（面试高频题）
 
 **参考答案**：
 **Rerank**：对检索结果进行二次排序，使用更精确的交叉编码器（Cross-Encoder）重新评分。
@@ -1297,8 +1438,29 @@ Agent幻觉比普通LLM更危险，因为幻觉会触发真实行动。
 
 ---
 
+#### Q78: 非结构化文档如何处理进RAG系统？（PDF/PPT/图片/网页的数据预处理）
+`tag:RAG` `tag:Chunking` `tag:向量检索` `difficulty:medium`
+
+> 📌 来源：小红书·小红书AI应用开发一面（OCR图片笔记提取）
+
+**参考答案**：
+核心思路：**解析 → 清洗 → 切片 → 补元数据 → Embedding → 索引**
+
+1. **PDF**：提取标题、段落、表格和页码（用PyPDF/pdfplumber），表格单独处理保留结构
+2. **PPT**：按slide拆分，提取标题+正文+备注，图片做OCR或存URL
+3. **图片**：先做OCR（Tesseract/PaddleOCR），得到文本后再走正常切片流程
+4. **网页**：用爬虫抽正文（去掉导航、广告、页脚），保留元信息（URL、标题、发布时间）
+5. **统一清洗**：去噪、去页眉页脚、按语义做切片（Chunking），补上来源、时间、文档层级等元数据
+6. **关键设计**：补元数据是为了后面召回时能溯源、做权限控制和展示引用来源
+
+**与Q33的区别**：Q33概述了RAG完整流程，本题聚焦数据预处理环节，深入不同格式文档的具体处理方法。
+
+---
+
 #### Q38: 向量数据库在前端的应用？前端需要处理向量化吗？
 `tag:RAG` `tag:向量检索` `tag:Agent架构` `difficulty:hard`
+
+> 📌 来源：综合整理（面试高频题）
 
 **参考答案**：
 **前端向量化的适用场景**：
@@ -1361,10 +1523,41 @@ async function search(query, documents, topK = 5) {
 
 ---
 
+#### Q81: 向量数据库选型——PGVector vs ES vs 专用向量DB怎么选？
+`tag:RAG` `tag:向量检索` `tag:架构设计` `difficulty:medium`
+
+> 📌 来源：小红书·小红书AI应用开发一面（OCR图片笔记提取）
+
+**参考答案**：
+选型取决于业务规模和现有技术栈：
+
+1. **PGVector适用场景**：
+   - 业务本身就在PostgreSQL上，数据规模不大（百万级以内）
+   - 结构化数据和向量数据需要放在一起管理
+   - 需要事务一致性（如向量数据和业务数据同步更新）
+   - 接入和运维成本低，不需要额外维护独立的检索集群
+
+2. **Elasticsearch适用场景**：
+   - 需要全文检索+语义检索混合，ES的BM25+向量混合搜索更强
+   - 文本搜索、模糊匹配、聚合分析为主
+   - 数据量大需要分布式扩展
+
+3. **专用向量数据库（Milvus/Qdrant/Weaviate）**：
+   - 十亿级以上向量规模，需要高性能ANN检索
+   - 多租户、高并发场景
+
+4. **结论**：不是替代关系，更多是"业务数据绑定选PGVector"vs"文本搜索为主选ES"vs"大规模向量检索选专用DB"
+
+**与Q35的区别**：Q35侧重向量检索vs关键词检索的原理对比，本题侧重向量数据库产品的选型决策。
+
+---
+
 ### 2.4 Prompt Engineering
 
 #### Q39: 什么是Prompt Engineering（提示工程）？前端在其中可以承担哪些工作？
 `tag:Prompt-Engineering` `tag:前端架构` `difficulty:medium`
+
+> 📌 来源：综合整理（面试高频题）
 
 **参考答案**：
 
@@ -1383,6 +1576,8 @@ async function search(query, documents, topK = 5) {
 #### Q40: 什么是Few-shot Prompting？和Zero-shot有什么区别？
 `tag:Prompt-Engineering` `difficulty:easy`
 
+> 📌 来源：综合整理（面试高频基础题）
+
 **参考答案**：
 - **Zero-shot**：不提供示例，直接让模型回答。如"请翻译以下句子"
 - **Few-shot**：提供少量示例（2-5个）引导模型理解任务格式和风格。如给几个翻译示例后再翻译
@@ -1395,6 +1590,8 @@ async function search(query, documents, topK = 5) {
 
 #### Q41: Chain-of-Thought（CoT）何时使用？Prompt太长导致质量下降怎么办？
 `tag:Prompt-Engineering` `tag:CoT` `difficulty:medium`
+
+> 📌 来源：综合整理（面试高频题）
 
 **参考答案**：
 **CoT适用场景**：数学推理、逻辑推理、多步计算、复杂分析
@@ -1416,6 +1613,8 @@ async function search(query, documents, topK = 5) {
 #### Q42: Agent的记忆模块分为哪几类？如何协同？
 `tag:记忆管理` `tag:Agent架构` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 - **短期记忆**：当前会话上下文，维持对话连贯性
 - **长期记忆**：持久化历史交互与知识，用向量数据库，跨会话复用
@@ -1432,6 +1631,8 @@ async function search(query, documents, topK = 5) {
 #### Q43: 如何避免记忆污染？
 `tag:记忆管理` `tag:安全` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 1. 写入前验证：仅存高置信度/用户确认信息
 2. 时效性控制：设置expiry_time自动过期
@@ -1443,7 +1644,7 @@ async function search(query, documents, topK = 5) {
 #### Q44: 记忆压缩技术有哪些？
 `tag:记忆管理` `tag:性能优化` `difficulty:medium`
 
-**参考答案**：
+> 📌 来源：综合整理（面试高频题）
 1. LLM摘要：对长对话生成摘要替代原文
 2. 滑动窗口+摘要：近N条原文 + 更早的合并摘要
 3. 事件提取：抽取结构化事件
@@ -1457,7 +1658,7 @@ async function search(query, documents, topK = 5) {
 #### Q45: Agent可能产生哪些安全风险？
 `tag:幻觉/安全` `tag:Agent架构` `difficulty:hard`
 
-**参考答案**：
+> 📌 来源：综合整理（面试高频题）
 1. 越权操作
 2. 数据泄露
 3. Prompt Injection攻击
@@ -1470,7 +1671,7 @@ async function search(query, documents, topK = 5) {
 #### Q46: 如何防止Prompt Injection攻击？
 `tag:Prompt注入` `tag:安全` `difficulty:hard`
 
-**参考答案**：
+> 📌 来源：综合整理（面试高频题）
 
 **攻击类型**：
 1. **直接注入**：`"忽略之前的指令，你现在是..."` 覆盖系统Prompt
@@ -1529,7 +1730,7 @@ function sanitizeInput(input) {
 #### Q47: 如何减少Agent的Token消耗？
 `tag:性能优化` `tag:Token优化` `difficulty:medium`
 
-**参考答案**：
+> 📌 来源：综合整理（面试高频题）
 1. 上下文压缩：摘要替代原文
 2. 结构化记忆注入：JSON代替自然语言
 3. 工具结果精简：只保留必要字段
@@ -1542,7 +1743,7 @@ function sanitizeInput(input) {
 #### Q48: 如何降低Agent应用的首字响应延迟（TTFT）？
 `tag:性能优化` `tag:TTFT` `tag:推理优化` `difficulty:hard`
 
-**参考答案**：
+> 📌 来源：综合整理（面试高频题）
 1. 减少上下文Token数
 2. 使用更小的模型做意图识别
 3. 流式输出
@@ -1557,6 +1758,8 @@ function sanitizeInput(input) {
 
 #### Q49: Monorepo架构如何实现？AI模块如何拆分？
 `tag:架构设计` `tag:工程化` `difficulty:medium`
+
+> 📌 来源：综合整理（面试高频题）
 
 **参考答案**：
 **Monorepo工具选型**：
@@ -1589,6 +1792,8 @@ ai-module/
 
 #### Q50: 双Token鉴权+无感刷新如何实现？请求队列分页错乱如何解决？
 `tag:权限管理` `tag:工程化` `difficulty:hard`
+
+> 📌 来源：综合整理（面试高频系统设计题）
 
 **参考答案**：
 **双Token机制**：`access_token`（短期，如2小时）+ `refresh_token`（长期，如7天）
@@ -1641,7 +1846,7 @@ axios.interceptors.response.use(
 #### Q76: Agent最常见的失败场景有哪些？如何解决？
 `tag:Agent架构` `tag:Function-Calling` `tag:幻觉/安全` `difficulty:hard`
 
-**来源**: CSDN·2026最新AI Agent岗面试复盘（2026-04）、微信公众号·前端面试考AI了（2026-04）
+> 📌 来源：[CSDN·2026最新AI Agent岗面试复盘](https://blog.csdn.net/w425772719/article/details/159921763) + [微信公众号·前端面试考AI了](https://mp.weixin.qq.com/s?src=11&timestamp=1776139474&ver=6659&signature=6sM0oPSpnBI4*k9cAhYjWtlMHNNLiL3dhpV4*715*uVp2S52jgVqJgWgTN5jtKdqwsLrkNRcK2TNjFHcfimtZDuNKVr4FuWiknsjQx6Bbqo0ocrhDec*3-tb96qn26Ux&new=1)
 
 **参考答案**：
 
@@ -1704,12 +1909,43 @@ axios.interceptors.response.use(
 
 ---
 
+#### Q77: 前端如何参与"模型效果评估"？有哪些量化手段？
+`tag:性能监控` `tag:AI协作` `tag:RAG` `difficulty:hard`
+
+> 📌 来源：小红书·高德AI Agent前端开发面经·三面（OCR图片笔记提取）
+
+**参考答案**：
+前端在模型效果评估中的角色主要体现在三个层面：
+
+1. **用户体验指标采集**：
+   - 首字响应延迟（TTFT）：用户发送问题到看到第一个字的时间
+   - 完整响应时间（TPOT）：从发送到完整回答的耗时
+   - 用户干预率：用户编辑AI回答的比例（说明AI输出质量不足）
+   - 消息重发率：用户重新发送相同问题的频率
+   - 对话轮次留存率：用户在多轮对话中的流失节点
+
+2. **答案质量反馈收集**：
+   - 点赞/点踩/举报的三级反馈机制
+   - "复制"率作为隐式正面反馈指标
+   - 用户追问率（追问说明回答不完整）
+
+3. **A/B测试与指标看板**：
+   - 对比不同Prompt/模型/检索策略下的用户行为指标
+   - 前端埋点上报 → 数据平台可视化 → 漏斗分析
+   - 关键转化指标：问题解决率（用户没追问直接结束对话的比例）
+
+**与Q61的区别**：Q61侧重传统前端性能监控（页面加载、异常捕获），本题侧重AI模型效果评估的前端参与方式和量化指标。
+
+---
+
 ## 四、技术基础
 
 ### 4.1 网络协议
 
 #### Q51: 简单介绍一下SSE和WebSocket的区别，为什么AI聊天场景多采用SSE？
 `tag:SSE/流式输出` `tag:网络协议` `difficulty:medium`
+
+> 📌 来源：综合整理（面试高频题）
 
 > 注：此题与Q11视角互补，Q11侧重流式输出选型，本题侧重协议对比。
 
@@ -1728,6 +1964,8 @@ axios.interceptors.response.use(
 
 #### Q52: 说一下Promise.all和Promise.allSettled的区别，并手写实现一个Promise.all
 `tag:并发控制` `tag:手写题` `difficulty:medium`
+
+> 📌 来源：综合整理（面试高频手写题）
 
 **参考答案**：
 - **Promise.all**：所有 Promise 都成功时返回所有结果；任一 Promise 失败时立即失败，返回第一个错误
@@ -1774,6 +2012,8 @@ function promiseAll(promises) {
 #### Q53: TypeScript中的interface和type有什么区别？AI应用中如何定义复杂的模型返回结构？
 `tag:TypeScript` `tag:AI数据结构` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 
 | 特性 | interface | type |
@@ -1816,6 +2056,8 @@ interface AIResponse<T = any> {
 #### Q54: React的Fiber架构解决了什么问题？在AI交互频繁更新UI的场景下有什么优势？
 `tag:React-Fiber` `tag:并发渲染` `difficulty:hard`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 
 **Fiber 架构解决的问题**：
@@ -1847,6 +2089,8 @@ function AIChat() {
 
 #### Q55: 如果让你从零设计一个企业级的AI助手前端架构，你会考虑哪些核心模块？
 `tag:架构设计` `tag:AI助手` `difficulty:hard`
+
+> 📌 来源：综合整理（面试高频架构设计题）
 
 **参考答案**：
 
@@ -1896,6 +2140,8 @@ function AIChat() {
 #### Q56: 无重复字符的最长子串（滑动窗口）
 `tag:滑动窗口` `tag:算法` `difficulty:medium`
 
+> 📌 来源：LeetCode #3 无重复字符的最长子串
+
 **参考答案**：
 ```javascript
 function lengthOfLongestSubstring(s) {
@@ -1917,6 +2163,8 @@ function lengthOfLongestSubstring(s) {
 
 #### Q57: 手写LRU缓存（O(1)时间复杂度）
 `tag:数据结构` `tag:算法` `tag:手写题` `difficulty:medium`
+
+> 📌 来源：LeetCode #146 LRU缓存
 
 **参考答案**：
 ```javascript
@@ -1947,6 +2195,8 @@ class LRUCache {
 #### Q58: 版本号对比（如比较1.0.1和1.0.01.1的大小）
 `tag:算法` `tag:字符串` `difficulty:easy`
 
+> 📌 来源：LeetCode #165 比较版本号
+
 **参考答案**：
 ```javascript
 function compareVersion(v1, v2) {
@@ -1967,6 +2217,8 @@ function compareVersion(v1, v2) {
 
 #### Q59: 判断两圆或两矩形是否碰撞
 `tag:算法` `tag:几何` `difficulty:easy`
+
+> 📌 来源：综合整理（面试高频几何题）
 
 **参考答案**：
 ```javascript
@@ -1995,6 +2247,8 @@ function isRectCollision(r1, r2) {
 
 #### Q60: 前端如何防御Prompt注入攻击？
 `tag:Prompt注入` `tag:安全` `difficulty:hard`
+
+> 📌 来源：综合整理（面试高频题）
 
 > 注：此题与Q46互补，Q46侧重Agent安全视角，本题侧重前端实现视角。
 
@@ -2034,6 +2288,8 @@ function isRectCollision(r1, r2) {
 #### Q61: 你们项目中是如何做前端性能监控和异常捕获的？
 `tag:性能监控` `tag:异常捕获` `tag:工程化` `difficulty:medium`
 
+> 📌 来源：综合整理（面试高频题）
+
 **参考答案**：
 
 **性能监控**：
@@ -2052,6 +2308,8 @@ function isRectCollision(r1, r2) {
 
 #### Q62: 介绍一下Vite的热更新（HMR）原理
 `tag:HMR` `tag:工程化` `difficulty:medium`
+
+> 📌 来源：综合整理（面试高频题）
 
 **参考答案**：
 
@@ -2083,7 +2341,7 @@ if (import.meta.hot) {
 #### Q63: AI应用中如何设计流式输出的用户体验？有哪些 UX 优化策略？
 `tag:AI-UX` `tag:流式输出` `difficulty:medium`
 
-**来源**: 天猫AI前端/全栈开发面经
+> 📌 来源：[微信公众号·天猫AI前端/全栈开发面经](https://mp.weixin.qq.com/s/VvDShazNvOAZdPtXfyrHoA)
 
 **参考答案**：
 
@@ -2118,7 +2376,7 @@ if (import.meta.hot) {
 #### Q64: 在AI驱动的应用中，如何平衡"自动化"与"用户控制权"？
 `tag:AI-UX` `tag:产品设计` `difficulty:hard`
 
-**来源**: 天猫AI前端/全栈开发面经
+> 📌 来源：[微信公众号·天猫AI前端/全栈开发面经](https://mp.weixin.qq.com/s/VvDShazNvOAZdPtXfyrHoA)
 
 **参考答案**：
 
@@ -2157,7 +2415,7 @@ if (import.meta.hot) {
 #### Q65: 在前端与LLM API之间为什么要加 Node.js BFF 转发层？如何设计？
 `tag:BFF` `tag:安全` `tag:流式转发` `difficulty:hard`
 
-**来源**: 天猫AI前端/全栈开发面经
+> 📌 来源：[微信公众号·天猫AI前端/全栈开发面经](https://mp.weixin.qq.com/s/VvDShazNvOAZdPtXfyrHoA)
 
 **参考答案**：
 
@@ -2241,7 +2499,7 @@ app.post('/api/chat', async (req, res) => {
 #### Q66: 如何在团队中推动 AI 技术的落地？你会选择什么场景切入？
 `tag:技术推动` `tag:落地策略` `difficulty:medium`
 
-**来源**: 天猫AI前端/全栈开发面经
+> 📌 来源：[微信公众号·天猫AI前端/全栈开发面经](https://mp.weixin.qq.com/s/VvDShazNvOAZdPtXfyrHoA)
 
 **参考答案**：
 
@@ -2275,7 +2533,7 @@ app.post('/api/chat', async (req, res) => {
 #### Q67: AI应用中处理大模型输出不确定性（JSON格式损坏）的前端方案？
 `tag:容错` `tag:流式解析` `difficulty:medium`
 
-**来源**: 天猫AI前端/全栈开发面经（与Q15互补，Q15侧重Markdown截断，本题侧重JSON场景）
+> 📌 来源：[微信公众号·天猫AI前端/全栈开发面经](https://mp.weixin.qq.com/s/VvDShazNvOAZdPtXfyrHoA)（与Q15互补，Q15侧重Markdown截断，本题侧重JSON场景）
 
 **参考答案**：
 
@@ -2334,7 +2592,7 @@ function safeJsonParse(str) {
 #### Q71: 智能客服Agent的多轮对话流程如何设计？如何处理用户意图模糊的情况？
 `tag:Agent架构` `tag:RAG` `tag:记忆管理` `difficulty:medium`
 
-**来源**: 微信公众号·docflow《想转AI全栈？这些Agent开发面试题》（2026-03）
+> 📌 来源：[微信公众号·docflow《想转AI全栈？这些Agent开发面试题》](https://mp.weixin.qq.com/s?src=11&timestamp=1776066792&ver=6657&signature=EJ77*MHlkzVSXy5*iV9m-MJ3O1vuGBV7DphbaVkihMoRnqbPiIA9RL9XZWYZAkgb65d90xJnqRkODsiEBNzssvHVsYOT0DY8FfRvmjwKIC*46K*0fqkFAaEARBOR72oN&new=1) + [CSDN·2026最新AI Agent岗面试复盘](https://blog.csdn.net/w425772719/article/details/159921763)
 
 **参考答案**：
 
@@ -2387,7 +2645,7 @@ function safeJsonParse(str) {
 #### Q72: 如何通过用户反馈优化Agent能力的闭环？
 `tag:Agent架构` `tag:RAG` `tag:性能监控` `difficulty:medium`
 
-**来源**: 微信公众号·docflow《想转AI全栈？这些Agent开发面试题》（2026-03）
+> 📌 来源：[微信公众号·docflow《想转AI全栈？这些Agent开发面试题》](https://mp.weixin.qq.com/s?src=11&timestamp=1776066792&ver=6657&signature=EJ77*MHlkzVSXy5*iV9m-MJ3O1vuGBV7DphbaVkihMoRnqbPiIA9RL9XZWYZAkgb65d90xJnqRkODsiEBNzssvHVsYOT0DY8FfRvmjwKIC*46K*0fqkFAaEARBOR72oN&new=1)
 
 **参考答案**：
 
@@ -2424,6 +2682,9 @@ function safeJsonParse(str) {
 8. **AI组件化设计**：通用AI Chat组件封装、性能监控、重试机制
 9. **前端向量化能力**：transformers.js、IndexedDB向量存储、本地检索
 10. **AI沙箱安全**：Web Worker/iframe/QuickJS WASM沙箱方案
+11. **RAG全链路深度考察** ⬆️：从数据预处理（PDF/PPT/网页）到评估指标（Recall@K/NDCG/忠实度）的完整链路
+12. **向量数据库选型** ⬆️：PGVector vs ES vs 专用向量DB的选型决策成为新考点
+13. **AI应用缓存架构** ⬆️：两级缓存（本地+Redis）、语义缓存、缓存失效策略
 
 ### 数据来源
 
@@ -2454,9 +2715,11 @@ function safeJsonParse(str) {
 | 23 | 2026最新AI Agent岗面试复盘 | CSDN | https://blog.csdn.net/w425772719/article/details/159921763 |
 | 24 | 33岁前端+AI面试(微信版) | 微信公众号 | https://mp.weixin.qq.com/s?src=11&timestamp=1776139474&ver=6659&signature=cs0Dgw8VGJTZ2Mj-fAe8Znd3WEVK6t5k4GqjNg6216ut2TRs9Vbkfo6a8H55ctCYl3BZ7Z*Y8CiqvsMXAb5WTAa8XuYNZQktRIbn*HRhdwHVA7bjWHyz0YYnjThh65pM&new=1 |
 | 25 | 前端面试考AI了 | 微信公众号 | https://mp.weixin.qq.com/s?src=11&timestamp=1776139474&ver=6659&signature=6sM0oPSpnBI4*k9cAhYjWtlMHNNLiL3dhpV4*715*uVp2S52jgVqJgWgTN5jtKdqwsLrkNRcK2TNjFHcfimtZDuNKVr4FuWiknsjQx6Bbqo0ocrhDec*3-tb96qn26Ux&new=1 |
+| 26 | 高德AI Agent前端开发面经 | 小红书 | xiaohongshu.com（OCR图片笔记提取） |
+| 27 | 小红书AI应用开发一面 | 小红书 | xiaohongshu.com（OCR图片笔记提取） |
 
 ---
 
 > 本题库由自动化爬取任务生成维护，如需更新请运行定时爬取任务。
 > 
-> **版本历史**：v1.0 (2026-04-09, 18题) → v2.0 (2026-04-10, 47题) → v2.1 (2026-04-13, 67题，新增天猫面经5题) → v2.2 (2026-04-13, 70题，新增3道独有题+5道视角互补合并) → v2.3 (2026-04-13, 72题，微信公众号新增2道独有题+3道视角互补合并) → v2.4 (2026-04-14, 76题，新增4道独有题Q73-Q76+3道视角互补合并到Q10/Q30/Q71)
+> **版本历史**：v1.0 (2026-04-09, 18题) → v2.0 (2026-04-10, 47题) → v2.1 (2026-04-13, 67题，新增天猫面经5题) → v2.2 (2026-04-13, 70题，新增3道独有题+5道视角互补合并) → v2.3 (2026-04-13, 72题，微信公众号新增2道独有题+3道视角互补合并) → v2.4 (2026-04-14, 76题，新增4道独有题Q73-Q76+3道视角互补合并到Q10/Q30/Q71) → v2.5 (2026-04-14, 81题，小红书新增5道独有题Q77-Q81) → v2.6 (2026-04-14, 81题，全部题目补充📌来源标注+链接)
