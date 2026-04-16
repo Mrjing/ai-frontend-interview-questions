@@ -1,6 +1,6 @@
 # AI 前端开发面试题库
 
-> **版本**: v2.7 | **更新日期**: 2026-04-15 | **题目总数**: 87
+> **版本**: v2.8 | **更新日期**: 2026-04-16 | **题目总数**: 97
 >
 > 本题库整合自掘金、知乎、牛客、CSDN、小红书等平台的最新面经，聚焦AI前端/全栈开发方向。
 >
@@ -290,6 +290,9 @@ class AIServiceFallback {
 - 系统架构设计、模糊需求澄清、安全决策需要人类判断
 - 开发者将转变为"系统架构师+需求描述者"
 
+**👉 项目选型论证视角**（来源: [微信公众号·字节AI Agent一面16问](https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=7OjZ6HWSFnwYZLSZeZ7kQqEHCKdzdaovBI6QyCTZ5*6QPyynFfbcPENCXWeZw2f5U8d8JfMwAG4kKQ2o2WbWixy3lrNl6UOHjVyXQuYyCkwHLOvHRIpyduKyFjlVfLsq&new=1)）：
+做Agent项目前需论证三点：①业务痛点是什么（人工操作多/决策链路长/知识分散）②为什么必须用Agent而非规则引擎或简单RAG（任务需要多步推理和工具调用）③ROI预估（开发成本vs节省人力/提升效率的量化收益）
+
 ---
 
 #### Q7: AI生成代码的审查清单有哪些？
@@ -351,6 +354,111 @@ class AIServiceFallback {
 4. **安全扫描**：依赖投毒检测、敏感信息泄露检测（Snyk/npm audit）
 5. **功能正确性**：通过自动化测试用例的比例
 6. **代码复杂度**：圈复杂度（McCabe）不超过10
+
+---
+
+#### Q88: AI生成内容中的XSS漏洞如何防御？
+`tag:幻觉/安全` `tag:AI协作` `difficulty:medium`
+
+> 📌 来源：[微信公众号·前端面试开始考AI了](https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=s7Jsins3mzg3i7UoI2fbiUWN3hixRo-QqNPNpqyRKLx38M0IecZvuUfTk1UBoQ9b-F3BVovOEg7lY4ca6AXW989Gr02z--2Vc*3N8VfOHK4GyPwA1HWOL-cfAQDlqbqQ&new=1)
+
+**参考答案**：
+AI生成内容可能包含恶意HTML/JS代码（如`<img onerror="alert(1)">`、`<script>`标签），直接渲染会导致XSS攻击。
+
+**防御方案**：
+
+1. **DOMPurify净化**：渲染前用`DOMPurify.sanitize()`清洗HTML，白名单机制只保留安全标签和属性
+```javascript
+import DOMPurify from 'dompurify'
+const safeHTML = DOMPurify.sanitize(aiGeneratedContent, {
+  ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li'],
+  ALLOWED_ATTR: ['class']
+})
+```
+
+2. **沙箱iframe渲染**：将AI输出放入sandbox属性的iframe，限制脚本执行
+3. **Content Security Policy（CSP）**：设置严格的CSP头（`script-src 'self'`），阻止内联脚本执行
+4. **Markdown安全渲染**：确保Markdown→HTML过程做标签过滤，禁止raw HTML
+5. **输出编码**：对AI返回的URL做校验（只允许https://），防止`javascript:`协议注入
+
+**与Q7/Q60的区别**：Q7侧重AI代码审查清单，Q60侧重Prompt注入防御，本题专门针对AI生成内容渲染时的XSS防御——是前端安全与AI安全的交叉点。
+
+---
+
+#### Q89: AST如何配合AI做代码审计？
+`tag:AI协作` `tag:安全` `difficulty:hard`
+
+> 📌 来源：[微信公众号·给大家普及一下字节大前端ai岗](https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=sKz3xqWjbYhKa-N2Xp0YMtiZQZ2sk30WY-xTjiUT3ptQ-1B1AiJ4BF2*Bn-Oye1ND6vq*GZHoB40gQ6P4PtS82NR1bYhWC9ttSJW43fbUbaKR67gfwUtYMCDzCg8*Ir2&new=1)
+
+**参考答案**：
+
+**完整流程**：
+1. **解析**：用Babel/ESLint将代码解析为AST
+2. **特征提取**：遍历AST节点提取结构化特征（变量声明模式、API调用链、数据流走向）
+3. **AI模型输入**：将AST特征转为向量或Token序列输入LLM
+4. **智能审计**：AI在AST层面做模式匹配和逻辑推理，定位安全风险（XSS注入路径、不安全API调用）并给出修复建议
+
+**关键优势**：AST保留了代码结构语义，比纯文本分析更精确；可检测跨文件的数据流污点传播。
+
+**实战代码**：
+```javascript
+const parser = require('@babel/parser')
+const traverse = require('@babel/traverse').default
+
+function auditCodeWithAI(sourceCode) {
+  // 1. 解析为AST
+  const ast = parser.parse(sourceCode, { sourceType: 'module', plugins: ['jsx', 'typescript'] })
+  
+  // 2. 提取关键特征
+  const patterns = []
+  traverse(ast, {
+    CallExpression(path) {
+      // 检测危险API调用（innerHTML、eval等）
+      if (path.node.callee.property?.name === 'innerHTML') {
+        patterns.push({ type: 'xss_risk', loc: path.node.loc, snippet: sourceCode.slice(path.node.start, path.node.end) })
+      }
+    },
+    MemberExpression(path) {
+      // 检测process.env直接暴露
+      if (path.node.object.name === 'process' && path.node.property.name === 'env') {
+        patterns.push({ type: 'secret_leak', loc: path.node.loc })
+      }
+    }
+  })
+  
+  // 3. 送入LLM做智能审计
+  return llm.audit({ astPatterns: patterns, sourceCode })
+}
+```
+
+**与Q7的区别**：Q7侧重AI代码审查清单（人工审查维度），本题侧重用AST+AI自动化代码审计——是"AI辅助安全"的进阶实践。
+
+---
+
+#### Q90: React Native的JSI是什么？AI生成代码如何利用新架构实现跨端高性能？
+`tag:AI协作` `tag:架构设计` `difficulty:medium`
+
+> 📌 来源：[微信公众号·给大家普及一下字节大前端ai岗](https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=sKz3xqWjbYhKa-N2Xp0YMtiZQZ2sk30WY-xTjiUT3ptQ-1B1AiJ4BF2*Bn-Oye1ND6vq*GZHoB40gQ6P4PtS82NR1bYhWC9ttSJW43fbUbaKR67gfwUtYMCDzCg8*Ir2&new=1)
+
+**参考答案**：
+
+**JSI（JavaScript Interface）**：RN新架构核心，取代异步Bridge，允许JS直接持有C++对象引用并同步调用原生方法。
+
+**旧架构（Bridge）问题**：
+- JS↔Native通信必须经过异步序列化/反序列化
+- 大量数据传输时性能瓶颈明显
+
+**新架构（JSI+TurboModule+Fabric）优势**：
+- JSI：同步调用，直接引用C++对象
+- TurboModule：按需加载原生模块，替代Bridge的批量加载
+- Fabric：新渲染系统，同步更新UI
+
+**AI生成代码利用方式**：
+1. **生成TurboModule调用代码**：使用JSI绑定的接口，不走Bridge异步序列化
+2. **生成C++/JSI绑定代码**：实现JS与原生同步互操作
+3. **AI Agent跨端代码生成**：理解新架构范式后，可生成高性能跨端组件
+
+**对前端的意义**：AI Agent可生成高性能跨端代码，但需要理解新架构范式（TurboModule/Fabric），不能生成旧Bridge模式的代码。面试考察重点在于理解架构演进方向和AI代码生成的适配能力。
 
 ---
 
@@ -1159,6 +1267,93 @@ class MessageCompressor {
 
 ---
 
+#### Q91: 多模态大模型的架构组成是什么？视觉编码器与LLM如何衔接？
+`tag:多模态` `tag:大模型原理` `tag:Transformer` `difficulty:medium`
+
+> 📌 来源：[微信公众号·字节AI Agent一面16问](https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=7OjZ6HWSFnwYZLSZeZ7kQqEHCKdzdaovBI6QyCTZ5*6QPyynFfbcPENCXWeZw2f5U8d8JfMwAG4kKQ2o2WbWixy3lrNl6UOHjVyXQuYyCkwHLOvHRIpyduKyFjlVfLsq&new=1)
+
+**参考答案**：
+
+**主流多模态架构分三类**：
+
+1. **早期融合（Early Fusion）**：如Flamingo，视觉特征直接插入LLM中间层，视觉和语言深度交织
+2. **对齐融合（Alignment Fusion）**：如LLaVA，视觉编码器→Projection Layer→LLM输入。最主流，结构清晰易训练
+3. **统一架构（Unified Architecture）**：如GPT-4V/Gemini，原生多模态训练，所有模态共享同一Transformer
+
+**编码器与LLM的衔接关键**：Projection Layer（投影层）
+- **MLP投影**（LLaVA方案）：简单的多层感知机，将视觉特征映射到LLM的词嵌入空间
+- **Q-Former**（BLIP-2方案）：可学习的Query向量从视觉编码器提取与文本相关的特征，更灵活但训练复杂
+- **直接拼接**：最简单，将视觉Token序列直接拼接到文本Token前面
+
+**面试要点**：理解"为什么需要Projection Layer"——视觉编码器输出维度和语义空间与LLM不同，投影层做"翻译"，让LLM能理解视觉信息。
+
+---
+
+#### Q92: LoRA和QLoRA的原理是什么？QLoRA如何优化显存？
+`tag:大模型原理` `tag:性能优化` `difficulty:medium`
+
+> 📌 来源：[微信公众号·字节AI Agent一面16问](https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=7OjZ6HWSFnwYZLSZeZ7kQqEHCKdzdaovBI6QyCTZ5*6QPyynFfbcPENCXWeZw2f5U8d8JfMwAG4kKQ2o2WbWixy3lrNl6UOHjVyXQuYyCkwHLOvHRIpyduKyFjlVfLsq&new=1)
+
+**参考答案**：
+
+**LoRA（Low-Rank Adaptation）**：
+- 在预训练权重旁加低秩分解矩阵（ΔW = A×B），只训练A和B参数（<1%原参数量），原权重冻结
+- 推理时可将LoRA权重合并回原权重，无额外推理开销
+- 秩r通常取8-64，r越大表达能力越强但参数越多
+
+**QLoRA在LoRA基础上加4-bit量化**：
+1. **4-bit NormalFloat（NF4）量化**：冻结原权重用NF4数据类型存储，信息论最优的量化方式
+2. **双重量化**：对量化常数再做量化，节省0.37bit/param
+3. **分页优化器**：利用CPU内存处理梯度检查点，避免GPU OOM
+
+**显存对比**：7B模型微调，全量需~28GB显存，LoRA需~14GB，QLoRA降至<6GB。
+
+**前端关联**：QLoRA让端侧微调成为可能——未来WebGPU/WebNN可能支持在浏览器中做QLoRA微调，实现个性化模型本地部署。
+
+---
+
+#### Q93: WebGPU和WebNN的区别？如何在浏览器调用NPU跑模型？
+`tag:大模型原理` `tag:性能优化` `difficulty:medium`
+
+> 📌 来源：[微信公众号·给大家普及一下字节大前端ai岗](https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=sKz3xqWjbYhKa-N2Xp0YMtiZQZ2sk30WY-xTjiUT3ptQ-1B1AiJ4BF2*Bn-Oye1ND6vq*GZHoB40gQ6P4PtS82NR1bYhWC9ttSJW43fbUbaKR67gfwUtYMCDzCg8*Ir2&new=1)
+
+**参考答案**：
+
+| 维度 | WebGPU | WebNN |
+|------|--------|-------|
+| 定位 | 底层图形+计算API（WebGL继任者） | 专用ML推理API |
+| 抽象层级 | 底层，需手写Compute Shader | 高层，直接调用算子接口 |
+| 灵活性 | 高（可自定义算子） | 低（使用预定义算子） |
+| NPU支持 | 不直接调度NPU | 直接封装NPU/GPU/DSP |
+
+**浏览器调用NPU流程（WebNN）**：
+```javascript
+// 1. 获取WebNN上下文
+const context = await navigator.ml.createContext()
+
+// 2. 用算子API构建计算图
+const builder = new MLGraphBuilder(context)
+const input = builder.input('input', { type: 'float32', dimensions: [1, 3, 224, 224] })
+const conv1 = builder.conv2d(input, weight1, { padding: [1, 1, 1, 1] })
+const relu1 = builder.relu(conv1)
+// ... 构建完整网络
+
+// 3. 编译模型（浏览器自动调度到NPU）
+const graph = await builder.build({ output: finalLayer })
+
+// 4. 执行推理
+const execution = await context.createExecution(graph)
+execution.setInput('input', inputData)
+await execution.start()
+const output = execution.getOutput('output')
+```
+
+**前端应用场景**：本地OCR、实时图像分割、离线语音识别、端侧文本分类——无需服务端，隐私保护+零延迟。
+
+**与Q38的关系**：Q38讲前端向量数据库（transformers.js本地向量化），本题讲端侧推理——是前端AI本地化的两大技术路径（向量检索 vs 模型推理）。
+
+---
+
 ### 2.2 AI Agent核心
 
 #### Q28: 什么是AI Agent？它和Chatbot的本质区别是什么？
@@ -1190,6 +1385,9 @@ AI Agent是能够感知环境、自主决策并执行动作以达成特定目标
 3. 工具调用（Function Calling）
 4. 记忆管理（短期+长期）
 5. 自我反思与纠错（如Reflexion）
+
+**👉 ReAct流程实现细节与fallback**（来源: [微信公众号·字节AI Agent一面16问](https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=7OjZ6HWSFnwYZLSZeZ7kQqEHCKdzdaovBI6QyCTZ5*6QPyynFfbcPENCXWeZw2f5U8d8JfMwAG4kKQ2o2WbWixy3lrNl6UOHjVyXQuYyCkwHLOvHRIpyduKyFjlVfLsq&new=1)）：
+实际项目中的ReAct实现需关注：①工具调度的异常处理——每个Tool Call都需try-catch，失败后用错误信息反馈LLM让其修正参数或换工具 ②fallback机制——主工具失败时自动切换备用工具（如主检索API超时→切换备用检索） ③步数限制与死循环检测——设置max_steps，连续3次相同tool_call直接终止 ④结果验证——工具返回结果做合理性检查，避免幻觉传播
 
 ---
 
@@ -1291,6 +1489,9 @@ function validateToolCall(toolName: string, args: unknown) {
 | 灵活性 | 受限于特定模型 | 可跨模型使用 |
 | 适用场景 | 外部Demo（开发快） | 内部Agent系统（安全可控） |
 
+**👉 RAG+MCP结合视角**（来源: [微信公众号·字节AI Agent一面16问](https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=7OjZ6HWSFnwYZLSZeZ7kQqEHCKdzdaovBI6QyCTZ5*6QPyynFfbcPENCXWeZw2f5U8d8JfMwAG4kKQ2o2WbWixy3lrNl6UOHjVyXQuYyCkwHLOvHRIpyduKyFjlVfLsq&new=1)）：
+在完整Agent系统中，RAG和MCP互补协作：MCP负责工具层（Agent调用外部API/数据库的标准化协议），RAG负责知识层（检索增强生成的全链路）。实战结合方式：①Agent通过MCP注册"知识检索"工具，内部调用RAG链路 ②MCP的Tool Schema描述中声明检索能力（如search_knowledge_base），LLM自主决定何时调用 ③检索结果通过MCP标准格式返回，Agent拿到结构化结果后继续推理
+
 ---
 
 #### Q32: Agent的幻觉问题怎么处理？
@@ -1309,6 +1510,35 @@ Agent幻觉比普通LLM更危险，因为幻觉会触发真实行动。
 5. **RAG增强**：检索真实知识减少幻觉
 6. **多路径投票**：多次推理取多数结果
 7. **人工审批**：敏感操作需人工确认
+
+---
+
+#### Q94: A2A协议与MCP的区别是什么？
+`tag:Agent架构` `tag:Function-Calling` `difficulty:medium`
+
+> 📌 来源：[微信公众号·字节AI Agent一面16问](https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=7OjZ6HWSFnwYZLSZeZ7kQqEHCKdzdaovBI6QyCTZ5*6QPyynFfbcPENCXWeZw2f5U8d8JfMwAG4kKQ2o2WbWixy3lrNl6UOHjVyXQuYyCkwHLOvHRIpyduKyFjlVfLsq&new=1)
+
+**参考答案**：
+
+**A2A（Agent-to-Agent）**：Google提出的Agent间通信协议，解决多Agent协作问题。
+**MCP（Model Context Protocol）**：Anthropic提出的模型与工具/数据交互协议。
+
+**核心区别**：
+
+| 维度 | A2A | MCP |
+|------|-----|-----|
+| 交互对象 | Agent ↔ Agent | 模型 ↔ 工具/数据 |
+| 协议层次 | 协作层 | 执行层 |
+| 解决问题 | 多Agent如何分工协作 | 单Agent如何调用工具 |
+| 典型场景 | 任务分解、Agent调度、结果聚合 | API调用、数据库查询、文件操作 |
+
+**互补关系**：A2A协调"谁做什么"，MCP解决"怎么做"。一个完整的多Agent系统中：A2A负责任务分解与Agent调度，每个Agent内部通过MCP调用具体工具完成任务。
+
+**面试追问**：
+- 什么时候需要多Agent？（单Agent能力不足、任务需多角色协作、安全性需隔离）
+- A2A和微服务架构有什么相似之处？（都是服务间通信，但A2A的"服务"是自治Agent）
+
+**与Q70的区别**：Q70讲MCP与Function Calling的区别（侧重安全校验），本题讲A2A与MCP的层次关系——是多Agent架构的宏观视角。
 
 ---
 
@@ -1445,6 +1675,79 @@ Agent幻觉比普通LLM更危险，因为幻觉会触发真实行动。
 4. 优化Embedding模型选择
 5. 查询改写/扩展
 6. 元数据过滤（按时间、类别等缩小范围）
+
+---
+
+#### Q95: 多模态用户信息如何存储与使用？结构化vs非结构化
+`tag:多模态` `tag:RAG` `tag:架构设计` `difficulty:medium`
+
+> 📌 来源：[微信公众号·字节AI Agent一面16问](https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=7OjZ6HWSFnwYZLSZeZ7kQqEHCKdzdaovBI6QyCTZ5*6QPyynFfbcPENCXWeZw2f5U8d8JfMwAG4kKQ2o2WbWixy3lrNl6UOHjVyXQuYyCkwHLOvHRIpyduKyFjlVfLsq&new=1)
+
+**参考答案**：
+
+**结构化信息存储**（用户属性、偏好、标签）：
+- 存储方式：关系型DB（MySQL/PostgreSQL）
+- 优势：精确查询和过滤，支持复杂条件组合
+- 典型数据：用户ID、年龄、偏好类别、历史操作记录
+
+**非结构化多模态信息存储**（图片、对话记录、文档）：
+- 存储方式：向量数据库（Milvus/Qdrant），做语义检索
+- 优势：语义相似度匹配，跨模态检索
+- 典型数据：图片Embedding、对话文本向量、文档切片
+
+**使用流程**：
+1. 先从结构化DB获取用户画像，做意图理解和个性化过滤
+2. 再从向量库检索相关多模态上下文，补充知识
+3. 两者拼接构建Prompt，送给LLM生成回答
+
+**关键设计**：建立结构化索引与向量索引的关联映射（如用户ID作为统一的关联键），确保两部分数据可跨库关联查询。
+
+**与Q21/Q38的关系**：Q21讲多模态消息格式，Q38讲前端向量数据库，本题侧重多模态信息的存储架构设计——是RAG系统的数据层视角。
+
+---
+
+#### Q96: 跨模态检索的核心逻辑是什么？CLIP和Q-Former分别怎么实现？
+`tag:多模态` `tag:RAG` `tag:向量检索` `difficulty:hard`
+
+> 📌 来源：[微信公众号·字节AI Agent一面16问](https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=7OjZ6HWSFnwYZLSZeZ7kQqEHCKdzdaovBI6QyCTZ5*6QPyynFfbcPENCXWeZw2f5U8d8JfMwAG4kKQ2o2WbWixy3lrNl6UOHjVyXQuYyCkwHLOvHRIpyduKyFjlVfLsq&new=1)
+
+**参考答案**：
+
+**跨模态检索核心**：将不同模态映射到同一语义空间，使得"文本Query"和"图像Content"可以在同一空间做相似度比较。
+
+**两种实现方式**：
+
+1. **共享嵌入空间（CLIP架构）**：
+   - 双编码器：图像编码器（ViT）+ 文本编码器（Transformer）
+   - 对比学习训练：同一对图文的向量拉近，不同对的拉远
+   - 推理时：图像→CLIP视觉编码器→图像向量；文本→CLIP文本编码器→文本向量；余弦相似度检索
+   - 优势：推理快（各编码一次即可）；劣势：模态交互浅
+
+2. **跨模态注意力（Q-Former，BLIP-2方案）**：
+   - 可学习的Query向量从视觉编码器提取与文本相关的特征
+   - Q-Former同时接收视觉特征和文本输入，做深层交互
+   - 优势：检索精度更高（深层模态交互）；劣势：推理开销更大
+
+**实战方案**：
+```javascript
+// CLIP跨模态检索流程
+async function crossModalSearch(textQuery, imageDatabase, topK = 5) {
+  // 1. 文本Query向量化
+  const queryVector = await clipEncodeText(textQuery)
+  
+  // 2. 在图像向量库中检索（图像向量已预计算）
+  const results = imageDatabase
+    .map(img => ({ ...img, score: cosineSimilarity(queryVector, img.embedding) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK)
+  
+  return results
+}
+```
+
+**进阶**：先用文本检索粗筛，再用跨模态重排序（Q-Former或Cross-Encoder）精排。
+
+**与Q35/Q38的关系**：Q35讲向量检索vs关键词检索，Q38讲前端向量数据库，本题专门讲跨模态检索的原理——是RAG检索的多模态升级。
 
 ---
 
@@ -1856,6 +2159,41 @@ axios.interceptors.response.use(
 1. **请求去重（推荐）**：为请求生成唯一key，相同key只保留最后一个请求
 2. **队列只保留最新**：队列中只存最新的一个请求函数
 3. **禁用刷新期间交互**：刷新时显示loading遮罩
+
+---
+
+#### Q97: Agent开发框架如何选型？（LangGraph/LangChain/CrewAI等）
+`tag:Agent架构` `tag:架构设计` `difficulty:medium`
+
+> 📌 来源：[微信公众号·字节AI Agent一面16问](https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=7OjZ6HWSFnwYZLSZeZ7kQqEHCKdzdaovBI6QyCTZ5*6QPyynFfbcPENCXWeZw2f5U8d8JfMwAG4kKQ2o2WbWixy3lrNl6UOHjVyXQuYyCkwHLOvHRIpyduKyFjlVfLsq&new=1)
+
+**参考答案**：
+
+选型依据任务复杂度和控制需求：
+
+| 框架 | 核心特点 | 适用场景 | 不适用场景 |
+|------|---------|---------|-----------|
+| **LangChain** | 生态丰富、上手快，链式调用 | 简单链式调用、原型验证 | 复杂Agent工作流（易成"面条代码"） |
+| **LangGraph** | 基于状态图的DAG，支持条件分支/循环/并行 | 多步推理、复杂Agent工作流 | 简单链式场景（过度设计） |
+| **CrewAI** | 多Agent协作，角色分工明确 | 多角色协作任务 | 单Agent场景 |
+| **AutoGPT** | 全自动自治Agent | 探索性任务 | 生产环境（不可控） |
+| **自研** | 完全可控 | 对性能/安全/可观测性要求高 | 快速验证阶段 |
+
+**2026选型趋势**：
+- **LangGraph成为主流**：可控性+复杂度兼顾，生产级Agent首选
+- **简单场景仍用LangChain**：单链路调用更高效
+- **多Agent协作选CrewAI**：开箱即用的角色分工机制
+- **大厂自研**：对安全、可观测性、性能有极致要求时
+
+**选型决策树**：
+```
+任务需要多步推理？ → 否 → 用LangChain
+                    → 是 → 需要多Agent协作？ → 否 → 用LangGraph
+                                                    → 是 → 用CrewAI
+生产级要求？ → 是 → 考虑自研或在LangGraph基础上二次封装
+```
+
+**与Q49的区别**：Q49讲Monorepo架构和AI模块拆分，本题讲Agent框架选型——是工程化架构的"技术选型"视角。
 
 ---
 
@@ -2401,6 +2739,9 @@ function AIChat() {
 ```
 
 **核心模块**：通信层抽象（SSE/WebSocket/HTTP2）、状态管理（Redux+Context+IndexedDB）、插件/工具层（PluginRegistry）、多模态渲染器、监控与评估系统。
+
+**👉 Agent系统架构模块协同视角**（来源: [微信公众号·字节AI Agent一面16问](https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=7OjZ6HWSFnwYZLSZeZ7kQqEHCKdzdaovBI6QyCTZ5*6QPyynFfbcPENCXWeZw2f5U8d8JfMwAG4kKQ2o2WbWixy3lrNl6UOHjVyXQuYyCkwHLOvHRIpyduKyFjlVfLsq&new=1)）：
+从Agent执行流程看，四大核心模块协同：①感知模块（输入解析、意图识别、多模态理解）→ ②规划模块（任务分解、工具选择、ReAct循环）→ ③执行模块（工具调用、API请求、结果解析）→ ④知识模块（RAG检索、记忆管理、上下文构建）。协同关键：感知结果驱动规划，规划指令触发执行，执行反馈更新知识，知识增强规划决策——形成闭环。
 
 ---
 
@@ -2954,6 +3295,11 @@ function safeJsonParse(str) {
 11. **RAG全链路深度考察** ⬆️：从数据预处理（PDF/PPT/网页）到评估指标（Recall@K/NDCG/忠实度）的完整链路
 12. **向量数据库选型** ⬆️：PGVector vs ES vs 专用向量DB的选型决策成为新考点
 13. **AI应用缓存架构** ⬆️：两级缓存（本地+Redis）、语义缓存、缓存失效策略
+14. **多模态架构与检索** ⬆️：视觉编码器与LLM的衔接（Projection Layer/Q-Former）、CLIP跨模态检索、多模态信息存储
+15. **A2A协议** ⬆️：Google提出的Agent间通信协议，与MCP互补（协作层vs执行层）
+16. **端侧推理（WebGPU/WebNN）** ⬆️：浏览器调用NPU跑模型，前端AI本地化
+17. **AI安全纵深防御** ⬆️：AI生成内容XSS防御、AST+AI代码审计
+18. **Agent框架选型** ⬆️：LangGraph成主流，多Agent协作选CrewAI
 
 ### 数据来源
 
@@ -2991,9 +3337,12 @@ function safeJsonParse(str) {
 | 30 | 2026最新AI Agent岗面试复盘 | SegmentFault | https://segmentfault.com/a/1190000047697204 |
 | 31 | 前端转AI Agent面试避坑指南 | htmlpage.cn | https://htmlpage.cn/topics/ai/frontend-to-ai-agent-interview-guide |
 | 32 | OpenClaw + AI Agent面试八股文 | 腾讯云 | https://cloud.tencent.com/developer/article/2654860 |
+| 33 | 字节AI Agent一面16问 | 微信公众号·Fox带你读源码 | https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=7OjZ6HWSFnwYZLSZeZ7kQqEHCKdzdaovBI6QyCTZ5*6QPyynFfbcPENCXWeZw2f5U8d8JfMwAG4kKQ2o2WbWixy3lrNl6UOHjVyXQuYyCkwHLOvHRIpyduKyFjlVfLsq&new=1 |
+| 34 | 给大家普及一下字节大前端ai岗 | 微信公众号·前端学习栈 | https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=sKz3xqWjbYhKa-N2Xp0YMtiZQZ2sk30WY-xTjiUT3ptQ-1B1AiJ4BF2*Bn-Oye1ND6vq*GZHoB40gQ6P4PtS82NR1bYhWC9ttSJW43fbUbaKR67gfwUtYMCDzCg8*Ir2&new=1 |
+| 35 | 前端面试开始考AI了 | 微信公众号·代码偏方 | https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=s7Jsins3mzg3i7UoI2fbiUWN3hixRo-QqNPNpqyRKLx38M0IecZvuUfTk1UBoQ9b-F3BVovOEg7lY4ca6AXW989Gr02z--2Vc*3N8VfOHK4GyPwA1HWOL-cfAQDlqbqQ&new=1 |
 
 ---
 
 > 本题库由自动化爬取任务生成维护，如需更新请运行定时爬取任务。
 > 
-> **版本历史**：v1.0 (2026-04-09, 18题) → v2.0 (2026-04-10, 47题) → v2.1 (2026-04-13, 67题，新增天猫面经5题) → v2.2 (2026-04-13, 70题，新增3道独有题+5道视角互补合并) → v2.3 (2026-04-13, 72题，微信公众号新增2道独有题+3道视角互补合并) → v2.4 (2026-04-14, 76题，新增4道独有题Q73-Q76+3道视角互补合并到Q10/Q30/Q71) → v2.5 (2026-04-14, 81题，小红书新增5道独有题Q77-Q81) → v2.6 (2026-04-14, 81题，全部题目补充📌来源标注+链接) → v2.7 (2026-04-15, 87题，新增6道独有题Q82-Q87+3道视角互补合并到Q31/Q46/Q76)
+> **版本历史**：v1.0 (2026-04-09, 18题) → v2.0 (2026-04-10, 47题) → v2.1 (2026-04-13, 67题，新增天猫面经5题) → v2.2 (2026-04-13, 70题，新增3道独有题+5道视角互补合并) → v2.3 (2026-04-13, 72题，微信公众号新增2道独有题+3道视角互补合并) → v2.4 (2026-04-14, 76题，新增4道独有题Q73-Q76+3道视角互补合并到Q10/Q30/Q71) → v2.5 (2026-04-14, 81题，小红书新增5道独有题Q77-Q81) → v2.6 (2026-04-14, 81题，全部题目补充📌来源标注+链接) → v2.7 (2026-04-15, 87题，新增6道独有题Q82-Q87+3道视角互补合并到Q31/Q46/Q76) → v2.8 (2026-04-16, 97题，新增10道独有题Q88-Q97+4道视角互补合并到Q6/Q29/Q70/Q55)
