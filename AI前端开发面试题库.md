@@ -1,6 +1,6 @@
 # AI 前端开发面试题库
 
-> **版本**: v2.8 | **更新日期**: 2026-04-16 | **题目总数**: 97
+> **版本**: v2.9 | **更新日期**: 2026-04-17 | **题目总数**: 100
 >
 > 本题库整合自掘金、知乎、牛客、CSDN、小红书等平台的最新面经，聚焦AI前端/全栈开发方向。
 >
@@ -355,6 +355,35 @@ class AIServiceFallback {
 5. **功能正确性**：通过自动化测试用例的比例
 6. **代码复杂度**：圈复杂度（McCabe）不超过10
 
+**👉 AI辅助编程Bug处理三步法**（来源: [CSDN·2026前端面试每日三题](https://blog.csdn.net/qq_37212162/article/details/159461908)）：
+AI生成代码出现Bug时的处理流程：
+1. **AI自查**：将报错信息+上下文代码反馈给AI，让AI自行定位和修复（多数语法/逻辑Bug AI能自修）
+2. **人工调试**：AI无法修复时，开发者用断点调试、日志追踪等传统方式定位，再让AI修改具体行
+3. **复盘沉淀**：Bug修复后记录根因和修复方式，加入项目知识库（RAG），防止同类Bug再次出现
+
+```javascript
+// 三步法自动化流程
+async function handleAIBug(error, code, context) {
+  // Step 1: AI自查
+  const fix = await llm.fixBug({ error, code, context })
+  if (fix.confidence > 0.8) return applyFix(fix)
+  
+  // Step 2: 人工调试辅助
+  const debugInfo = await collectDebugInfo(error) // 断点、调用栈、变量快照
+  const targetedFix = await llm.fixBug({ error, code, context, debugInfo })
+  if (targetedFix.confidence > 0.6) return applyFix(targetedFix)
+  
+  // Step 3: 复盘沉淀
+  await knowledgeBase.add({
+    type: 'bug_pattern',
+    error: error.message,
+    rootCause: debugInfo.rootCause,
+    fix: targetedFix.code,
+    timestamp: Date.now()
+  })
+}
+```
+
 ---
 
 #### Q88: AI生成内容中的XSS漏洞如何防御？
@@ -459,6 +488,139 @@ function auditCodeWithAI(sourceCode) {
 3. **AI Agent跨端代码生成**：理解新架构范式后，可生成高性能跨端组件
 
 **对前端的意义**：AI Agent可生成高性能跨端代码，但需要理解新架构范式（TurboModule/Fabric），不能生成旧Bridge模式的代码。面试考察重点在于理解架构演进方向和AI代码生成的适配能力。
+
+---
+
+#### Q98: UGC视频AI配乐+字幕的前端架构如何设计？（FFmpeg.wasm+Web Worker+CSS滤镜降级）
+`tag:AI协作` `tag:性能优化` `difficulty:hard`
+
+> 📌 来源：[微信公众号·小红书Web前端AI岗面经](https://mp.weixin.qq.com/s?src=11&timestamp=1776398475&ver=6665&signature=XNWsfrSb8oVp1EgVkMxg3fVdtXAtYvzyzaCGDsr1lF36oScFtUv3xS8VVE8p-axOVzKxHOQVjFzMXJsFOdCQLo0bo8UQlFbtApE5wn6gH3XFboxCwpueGIWp*nQyVplH&new=1)
+
+**参考答案**：
+
+**核心挑战**：在浏览器端完成AI视频处理——配乐生成、字幕提取和叠加、滤镜渲染，且不能阻塞UI。
+
+**分层架构设计**：
+
+1. **AI推理层（Web Worker）**：
+   - 将AI模型推理（音频生成、语音识别）放在Web Worker中
+   - 使用ONNX Runtime Web加载轻量模型（如Whisper-tiny做字幕提取）
+   - 进度通过postMessage实时回传主线程
+
+2. **视频处理层（FFmpeg.wasm）**：
+   - 使用FFmpeg.wasm做视频编解码、音视频合并、字幕硬烧
+   - SharedArrayBuffer实现主线程与Worker的零拷贝数据传递
+   ```javascript
+   // FFmpeg.wasm视频处理流水线
+   async function processVideo(videoFile, bgMusic, subtitleTrack) {
+     const ffmpeg = createFFmpeg({ log: true, corePath: '/ffmpeg-core.js' })
+     await ffmpeg.load()
+     
+     // 1. 提取原始音轨
+     ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(videoFile))
+     await ffmpeg.run('-i', 'input.mp4', '-vn', '-acodec', 'copy', 'audio.aac')
+     
+     // 2. 混合AI配乐
+     ffmpeg.FS('writeFile', 'bgm.mp3', await fetchFile(bgMusic))
+     await ffmpeg.run('-i', 'audio.aac', '-i', 'bgm.mp3',
+       '-filter_complex', '[0:a]volume=1.0[a1];[1:a]volume=0.3[a2];[a1][a2]amix=inputs=2:duration=first',
+       'mixed.mp3')
+     
+     // 3. 合并回视频+硬烧字幕
+     await ffmpeg.run('-i', 'input.mp4', '-i', 'mixed.mp3',
+       '-c:v', 'copy', '-c:a', 'aac', '-map', '0:v', '-map', '1:a',
+       '-vf', `subtitles=${subtitleTrack}`,
+       'output.mp4')
+   }
+   ```
+
+3. **渲染层（CSS滤镜降级）**：
+   - 高端设备：WebGL shader实现实时滤镜预览
+   - 低端设备：降级为CSS filter（`filter: contrast() saturate() brightness()`），牺牲精度保流畅
+   - 检测策略：先测试WebGL渲染帧率，<30fps自动降级
+
+```javascript
+function getFilterStrategy() {
+  const canvas = document.createElement('canvas')
+  const gl = canvas.getContext('webgl2')
+  if (!gl) return 'css-fallback'
+  
+  // 性能探测：渲染100帧计算FPS
+  const fps = measureWebGLPerformance(gl)
+  return fps >= 30 ? 'webgl' : 'css-fallback'
+}
+```
+
+**性能优化关键**：
+- 视频分片处理：长视频按5秒切片，并行处理
+- 预览用低分辨率（360p），导出用原分辨率
+- AI推理结果缓存：相同音频片段不重复生成
+
+---
+
+#### Q100: AI灵感助手的模板同质化问题如何解决？（Redis缓存+长尾兴趣挖掘+Bandit算法）
+`tag:AI协作` `tag:性能优化` `tag:RAG` `difficulty:medium`
+
+> 📌 来源：[微信公众号·小红书Web前端AI岗面经](https://mp.weixin.qq.com/s?src=11&timestamp=1776398475&ver=6665&signature=XNWsfrSb8oVp1EgVkMxg3fVdtXAtYvzyzaCGDsr1lF36oScFtUv3xS8VVE8p-axOVzKxHOQVjFzMXJsFOdCQLo0bo8UQlFbtApE5wn6gH3XFboxCwpueGIWp*nQyVplH&new=1)
+
+**参考答案**：
+
+**问题**：AI灵感助手（如PPT模板、文案生成、设计建议）使用同一Prompt模板时，大量用户得到高度相似的输出，导致"模板同质化"。
+
+**三层解决方案**：
+
+1. **Redis缓存去重（快速去重层）**：
+   - 对AI生成结果做内容指纹（SimHash/MinHash），存入Redis Set
+   - 新生成结果先查重：SimHash汉明距离<3视为重复，触发重新生成
+   ```javascript
+   async function generateWithDedup(prompt, userId, maxRetries = 3) {
+     for (let i = 0; i < maxRetries; i++) {
+       const result = await llm.generate(prompt)
+       const fingerprint = simhash(result.content)
+       const isDuplicate = await redis.sismember(`dedup:${prompt.hash}`, fingerprint)
+       if (!isDuplicate) {
+         await redis.sadd(`dedup:${prompt.hash}`, fingerprint)
+         return result
+       }
+     }
+     return { content: '暂无独特灵感，请换个角度试试', isFallback: true }
+   }
+   ```
+
+2. **长尾兴趣挖掘（个性化层）**：
+   - 从用户行为数据挖掘长尾兴趣标签（非主流但高相关）
+   - 将长尾标签注入Prompt，引导AI生成差异化内容
+   - 示例：用户搜索"科技PPT"→ 挖掘长尾标签"赛博朋克+数据可视化"→ 生成独特风格
+
+3. **Bandit算法+A/B测试（探索利用层）**：
+   - 用多臂老虎机（Multi-Armed Bandit）平衡"利用已验证好模板"和"探索新风格"
+   - 每个模板风格=一个arm，CTR/完成率=reward
+   - Thompson Sampling动态调整各风格的展示概率
+   ```javascript
+   class TemplateBandit {
+     constructor(styles) {
+       this.arms = styles.map(s => ({ style: s, alpha: 1, beta: 1 })) // Beta分布参数
+     }
+     select() {
+       // Thompson Sampling：从每个arm的Beta分布采样，选最大的
+       const samples = this.arms.map(arm => ({
+         style: arm.style,
+         sample: Math.random() ** (1 / arm.alpha) * (1 - Math.random()) ** (1 / arm.beta)
+       }))
+       return samples.sort((a, b) => b.sample - a.sample)[0].style
+     }
+     update(style, reward) {
+       const arm = this.arms.find(a => a.style === style)
+       if (reward) arm.alpha++ // 正反馈
+       else arm.beta++        // 负反馈
+     }
+   }
+   ```
+
+**前端配合**：
+- 模板展示时A/B分流（不同用户看到不同风格候选）
+- 用户操作（选择/跳过/编辑）作为reward信号上报
+- 首屏加载时预取Bandit选中的模板风格
 
 ---
 
@@ -578,6 +740,40 @@ eventSource.addEventListener('message', (e) => {
   processedIds.add(e.lastEventId)
   appendToMessage(JSON.parse(e.data))
 })
+```
+
+**👉 AI图文生成工具流式断连重连（CDN预加载+Map去重）**（来源: [微信公众号·小红书Web前端AI岗面经](https://mp.weixin.qq.com/s?src=11&timestamp=1776398475&ver=6665&signature=XNWsfrSb8oVp1EgVkMxg3fVdtXAtYvzyzaCGDsr1lF36oScFtUv3xS8VVE8p-axOVzKxHOQVjFzMXJsFOdCQLo0bo8UQlFbtApE5wn6gH3XFboxCwpueGIWp*nQyVplH&new=1)）：
+AI图文生成工具（如DALL-E/Midjourney集成前端）的流式输出断连场景更复杂——不仅有文本，还有图片URL和进度更新：
+1. **CDN预加载**：对AI生成图片的URL做prefetch（`<link rel="prefetch">`），断连重连后图片可从CDN缓存秒开，无需重新请求
+2. **Map去重**：用Map替代Set做去重（key=eventChunkId, value=chunkIndex），重连续传时不仅判断是否已接收，还能按index排序重组乱序chunk
+```javascript
+class AIImageStreamReconnector {
+  constructor() {
+    this.receivedChunks = new Map() // chunkId → { index, data, type }
+    this.prefetchUrls = []
+  }
+  
+  onChunk(chunk) {
+    if (this.receivedChunks.has(chunk.id)) return // 去重
+    this.receivedChunks.set(chunk.id, { index: chunk.index, data: chunk.data, type: chunk.type })
+    
+    // 图片URL预加载到CDN
+    if (chunk.type === 'image_url') {
+      const link = document.createElement('link')
+      link.rel = 'prefetch'
+      link.href = chunk.data
+      document.head.appendChild(link)
+      this.prefetchUrls.push(chunk.data)
+    }
+  }
+  
+  // 重连后按index排序重组
+  getOrderedContent() {
+    return [...this.receivedChunks.values()]
+      .sort((a, b) => a.index - b.index)
+      .map(c => c.data)
+  }
+}
 ```
 
 ---
@@ -1939,6 +2135,21 @@ async function search(query, documents, topK = 5) {
 3. 记忆更新：任务完成后将关键信息写入长期记忆
 4. 优先级控制：短期记忆优先级高于长期
 
+**👉 Agent记忆四层模型与工程问题**（来源: [CSDN·淘天Agent面试必考记忆机制](https://blog.csdn.net/m0_59163425/article/details/159966211)）：
+实际Agent系统中，记忆可细化为四层模型：
+
+| 层级 | 类型 | 存储 | 生命周期 | 示例 |
+|------|------|------|---------|------|
+| L1 | 感知记忆 | 请求上下文 | 单次请求 | 用户当前输入、工具返回结果 |
+| L2 | 短期记忆 | 会话上下文 | 单次会话 | 对话历史、当前任务状态 |
+| L3 | 长期记忆 | 向量数据库 | 跨会话持久 | 用户偏好、历史交互摘要 |
+| L4 | 实体记忆 | 知识图谱 | 永久 | 用户画像、领域知识实体 |
+
+**三种工程问题**：
+1. **记忆冲突**：L2短期记忆与L3长期记忆矛盾时，以短期为准但标记冲突，需用户确认后更新长期记忆
+2. **记忆泄漏**：跨用户会话记忆串扰（如多租户场景），需严格隔离记忆命名空间（tenantId+userId作为前缀）
+3. **记忆衰减**：长期记忆需定期衰减不常用条目的权重，避免无关记忆污染检索结果
+
 ---
 
 #### Q43: 如何避免记忆污染？
@@ -2799,6 +3010,12 @@ class LRUCache {
   }
 }
 ```
+
+**👉 AI场景下的LRU缓存版本冲突处理**（来源: [微信公众号·小红书Web前端AI岗面经](https://mp.weixin.qq.com/s?src=11&timestamp=1776398475&ver=6665&signature=XNWsfrSb8oVp1EgVkMxg3fVdtXAtYvzyzaCGDsr1lF36oScFtUv3xS8VVE8p-axOVzKxHOQVjFzMXJsFOdCQLo0bo8UQlFbtApE5wn6gH3XFboxCwpueGIWp*nQyVplH&new=1)）：
+AI应用中缓存模型权重/Embedding时，LRU还需处理版本冲突——模型更新后旧缓存必须失效：
+- **版本标记**：每个缓存条目附带模型版本号，版本更新时旧条目自动失效
+- **优先淘汰旧版本**：容量满时优先淘汰旧版本条目，而非最久未使用的
+- **灰度替换**：新版本先对部分流量生效，旧版本作为fallback保留
 
 ---
 
