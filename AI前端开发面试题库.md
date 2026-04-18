@@ -2255,6 +2255,67 @@ function sanitizeInput(input) {
 
 ---
 
+#### Q99: 直播弹幕AI实时过滤的三层架构如何设计？（端侧BERT-tiny+边缘AC自动机+云端审核）
+`tag:Agent架构` `tag:幻觉/安全` `tag:性能优化` `difficulty:hard`
+
+> 📌 来源：[微信公众号·小红书Web前端AI岗面经](https://mp.weixin.qq.com/s?src=11&timestamp=1776398475&ver=6665&signature=XNWsfrSb8oVp1EgVkMxg3fVdtXAtYvzyzaCGDsr1lF36oScFtUv3xS8VVE8p-axOVzKxHOQVjFzMXJsFOdCQLo0bo8UQlFbtApE5wn6gH3XFboxCwpueGIWp*nQyVplH&new=1)
+
+**参考答案**：
+
+**核心挑战**：直播弹幕需要毫秒级过滤延迟（<50ms），但AI模型推理需100ms+，且不能有漏判（政治敏感/色情/暴力）。
+
+**三层过滤架构**（快→慢→准，漏斗式收窄）：
+
+```
+弹幕输入 → L1端侧(5ms) → L2边缘(20ms) → L3云端(200ms) → 展示
+              ↓放行          ↓放行           ↓放行
+           明显安全       需进一步判断      疑似违规
+           无敏感词       敏感词+语义判断   深度语义审核
+```
+
+**L1 端侧过滤（BERT-tiny，5ms）**：
+- 在浏览器端用WebGPU/WebNN加载BERT-tiny模型（约17MB）
+- 快速分类：安全/疑似/违规三档
+- 明确安全的弹幕直接放行（占80%+流量），疑似弹幕送往L2
+```javascript
+// 端侧BERT-tiny分类
+async function clientSideFilter(danmaku) {
+  const session = await ort.InferenceSession.create('/models/bert-tiny.onnx')
+  const input = tokenize(danmaku)
+  const output = await session.run({ input_ids: input })
+  const [safe, suspicious, violation] = output.logits.softmax()
+  
+  if (safe > 0.9) return { pass: true, confidence: safe }
+  if (violation > 0.8) return { pass: false, reason: 'violation' }
+  return { pass: 'review', confidence: suspicious } // 送L2
+}
+```
+
+**L2 边缘过滤（AC自动机+轻量模型，20ms）**：
+- 部署在CDN边缘节点
+- AC自动机（Aho-Corasick）做敏感词多模式匹配，O(n)时间复杂度
+- 辅以轻量分类模型做语义判断（"你真厉害"在游戏/职场场景含义不同）
+
+**L3 云端审核（大模型+人工复核，200ms）****：
+- 部署在中心机房
+- 大模型做深度语义理解（隐晦表达、谐音梗、暗语）
+- 高风险弹幕进入人工审核队列
+- 审核结果反馈训练L1/L2模型（主动学习闭环）
+
+**性能对比**：
+| 层级 | 延迟 | 准确率 | 处理比例 | 成本 |
+|------|------|--------|---------|------|
+| L1端侧 | 5ms | 85% | 80%放行+5%拦截 | 零（客户端计算） |
+| L2边缘 | 20ms | 95% | 12%放行+2%拦截 | 低 |
+| L3云端 | 200ms | 99%+ | 3%放行+1%拦截 | 高 |
+
+**前端关键决策**：
+- L1模型选择：BERT-tiny（17MB）vs DistilBERT（66MB），移动端选tiny
+- 降级策略：WebGPU不可用时跳过L1，直接走L2
+- 异步展示：弹幕先展示，L3审核不通过时撤回（带"已过滤"提示）
+
+---
+
 ### 3.3 性能优化
 
 #### Q47: 如何减少Agent的Token消耗？
@@ -3517,6 +3578,10 @@ function safeJsonParse(str) {
 16. **端侧推理（WebGPU/WebNN）** ⬆️：浏览器调用NPU跑模型，前端AI本地化
 17. **AI安全纵深防御** ⬆️：AI生成内容XSS防御、AST+AI代码审计
 18. **Agent框架选型** ⬆️：LangGraph成主流，多Agent协作选CrewAI
+19. **端侧AI媒体处理** ⬆️：FFmpeg.wasm+Web Worker实现浏览器端视频AI配乐/字幕，CSS滤镜降级策略
+20. **AI安全纵深过滤** ⬆️：端侧BERT-tiny+边缘AC自动机+云端审核的三层弹幕过滤架构
+21. **AI生成去同质化** ⬆️：SimHash去重+长尾兴趣挖掘+Bandit算法解决模板同质化
+22. **Agent记忆四层模型** ⬆️：感知+短期+长期+实体，三种工程问题（冲突/泄漏/衰减）
 
 ### 数据来源
 
@@ -3557,9 +3622,15 @@ function safeJsonParse(str) {
 | 33 | 字节AI Agent一面16问 | 微信公众号·Fox带你读源码 | https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=7OjZ6HWSFnwYZLSZeZ7kQqEHCKdzdaovBI6QyCTZ5*6QPyynFfbcPENCXWeZw2f5U8d8JfMwAG4kKQ2o2WbWixy3lrNl6UOHjVyXQuYyCkwHLOvHRIpyduKyFjlVfLsq&new=1 |
 | 34 | 给大家普及一下字节大前端ai岗 | 微信公众号·前端学习栈 | https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=sKz3xqWjbYhKa-N2Xp0YMtiZQZ2sk30WY-xTjiUT3ptQ-1B1AiJ4BF2*Bn-Oye1ND6vq*GZHoB40gQ6P4PtS82NR1bYhWC9ttSJW43fbUbaKR67gfwUtYMCDzCg8*Ir2&new=1 |
 | 35 | 前端面试开始考AI了 | 微信公众号·代码偏方 | https://mp.weixin.qq.com/s?src=11&timestamp=1776312043&ver=6663&signature=s7Jsins3mzg3i7UoI2fbiUWN3hixRo-QqNPNpqyRKLx38M0IecZvuUfTk1UBoQ9b-F3BVovOEg7lY4ca6AXW989Gr02z--2Vc*3N8VfOHK4GyPwA1HWOL-cfAQDlqbqQ&new=1 |
+| 36 | 小红书Web前端AI岗面经 | 微信公众号·程序员源源 | https://mp.weixin.qq.com/s?src=11&timestamp=1776398475&ver=6665&signature=XNWsfrSb8oVp1EgVkMxg3fVdtXAtYvzyzaCGDsr1lF36oScFtUv3xS8VVE8p-axOVzKxHOQVjFzMXJsFOdCQLo0bo8UQlFbtApE5wn6gH3XFboxCwpueGIWp*nQyVplH&new=1 |
+| 37 | 淘天Agent面试必考记忆机制 | CSDN | https://blog.csdn.net/m0_59163425/article/details/159966211 |
+| 38 | 淘天AI Agent面试官连环追问 | CSDN | https://blog.csdn.net/2401_84204413/article/details/158968154 |
+| 39 | Agent开发高频面试题 | CSDN | https://blog.csdn.net/EnjoyEDU/article/details/159976952 |
+| 40 | 2026前端面试每日三题 | CSDN | https://blog.csdn.net/qq_37212162/article/details/159461908 |
+| 41 | 5种Agent模式项目面试 | CSDN | https://blog.csdn.net/2401_84204207/article/details/160155366 |
 
 ---
 
 > 本题库由自动化爬取任务生成维护，如需更新请运行定时爬取任务。
 > 
-> **版本历史**：v1.0 (2026-04-09, 18题) → v2.0 (2026-04-10, 47题) → v2.1 (2026-04-13, 67题，新增天猫面经5题) → v2.2 (2026-04-13, 70题，新增3道独有题+5道视角互补合并) → v2.3 (2026-04-13, 72题，微信公众号新增2道独有题+3道视角互补合并) → v2.4 (2026-04-14, 76题，新增4道独有题Q73-Q76+3道视角互补合并到Q10/Q30/Q71) → v2.5 (2026-04-14, 81题，小红书新增5道独有题Q77-Q81) → v2.6 (2026-04-14, 81题，全部题目补充📌来源标注+链接) → v2.7 (2026-04-15, 87题，新增6道独有题Q82-Q87+3道视角互补合并到Q31/Q46/Q76) → v2.8 (2026-04-16, 97题，新增10道独有题Q88-Q97+4道视角互补合并到Q6/Q29/Q70/Q55)
+> **版本历史**：v1.0 (2026-04-09, 18题) → v2.0 (2026-04-10, 47题) → v2.1 (2026-04-13, 67题，新增天猫面经5题) → v2.2 (2026-04-13, 70题，新增3道独有题+5道视角互补合并) → v2.3 (2026-04-13, 72题，微信公众号新增2道独有题+3道视角互补合并) → v2.4 (2026-04-14, 76题，新增4道独有题Q73-Q76+3道视角互补合并到Q10/Q30/Q71) → v2.5 (2026-04-14, 81题，小红书新增5道独有题Q77-Q81) → v2.6 (2026-04-14, 81题，全部题目补充📌来源标注+链接) → v2.7 (2026-04-15, 87题，新增6道独有题Q82-Q87+3道视角互补合并到Q31/Q46/Q76) → v2.8 (2026-04-16, 97题，新增10道独有题Q88-Q97+4道视角互补合并到Q6/Q29/Q70/Q55) → v2.9 (2026-04-17, 100题，新增3道独有题Q98-Q100+4道视角互补合并到Q10/Q13/Q42/Q57)
