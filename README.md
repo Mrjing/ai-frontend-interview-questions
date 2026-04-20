@@ -32,8 +32,6 @@
 │   ├── jishuzhan/             #   技术栈面经
 │   ├── nowcoder/              #   牛客面经
 │   └── kamacoder/             #   KamaCoder 面经
-├── my-site/                   # 题库展示页面
-│   └── index.html
 ├── scripts/                   # 工具脚本
 │   └── batch_process_articles.py
 └── README.md
