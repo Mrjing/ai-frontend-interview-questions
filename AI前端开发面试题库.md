@@ -1,6 +1,6 @@
 # AI 前端开发面试题库
 
-> **版本**: v3.0 | **更新日期**: 2026-04-20 | **题目总数**: 106
+> **版本**: v3.1 | **更新日期**: 2026-04-21 | **题目总数**: 110
 >
 > 本题库整合自掘金、知乎、牛客、CSDN、小红书等平台的最新面经，聚焦AI前端/全栈开发方向。
 >
@@ -621,6 +621,123 @@ function getFilterStrategy() {
 - 模板展示时A/B分流（不同用户看到不同风格候选）
 - 用户操作（选择/跳过/编辑）作为reward信号上报
 - 首屏加载时预取Bandit选中的模板风格
+
+---
+
+#### Q108: AI驱动组件生成的工作原理是什么？如何实现设计稿生成React代码？
+`tag:AI协作` `tag:架构设计` `difficulty:medium`
+
+> 📌 来源：[CSDN·2026前端面试题深度整理](https://blog.csdn.net/qq_39287602/article/details/159978296)
+
+**参考答案**：
+AI驱动组件生成（如Vercel v0、GitHub Copilot Workspace）核心是"描述→代码"的自动化流水线。
+
+**工作原理**：
+1. **意图解析**：将自然语言/设计稿描述转化为结构化组件Spec（props、state、事件、样式约束）
+2. **代码生成**：基于Spec+Few-shot模板生成React/Vue组件代码
+3. **可视化预览**：沙箱实时渲染，用户可交互验证
+4. **迭代修正**：用户反馈→AI修改→重新渲染的闭环
+
+**设计稿生成React代码方案**：
+```typescript
+// 1. 设计稿解析（Figma Plugin / 设计系统Token提取）
+interface DesignToken {
+  component: string       // Button / Card / Modal
+  props: Record<string, any>  // variant, size, color
+  layout: CSSProperties    // flex/grid 布局
+  children: DesignToken[]  // 嵌套组件
+}
+
+// 2. Token → Prompt → AI生成
+async function generateComponent(token: DesignToken) {
+  const prompt = `Generate a React ${token.component} with:
+    - Props: ${JSON.stringify(token.props)}
+    - Layout: ${JSON.stringify(token.layout)}
+    - Using Tailwind CSS
+    - Accessible (ARIA labels)`
+  
+  const code = await llm.generate(prompt, {
+    system: designSystemContext, // 注入设计系统约束
+    temperature: 0.2             // 低随机性保证一致性
+  })
+  return code
+}
+
+// 3. 沙箱预览 + 热更新
+const sandbox = await createSandbox()
+await sandbox.evaluate(generatedCode)
+sandbox.on('error', (e) => retryWithFix(e)) // 自动修复编译错误
+```
+
+**关键挑战与解法**：
+| 挑战 | 解法 |
+|------|------|
+| 设计稿到代码的一致性 | 设计Token标准化 + Design System约束注入 |
+| 生成代码的可维护性 | 强制ESLint规则 + 组件拆分约束 |
+| 样式还原度 | 视觉回归测试（Playwright截图对比） |
+| 安全风险 | 沙箱隔离执行 + 代码审计（检测eval/innerHTML） |
+
+**与Q10的区别**：Q10侧重AI生成代码的质量保障流程，本题侧重"设计意图→可运行代码"的端到端生成架构。
+
+---
+
+#### Q111: 如何量化评估AI生成的代码质量？圈复杂度、可维护性指数如何度量？
+`tag:AI协作` `tag:代码质量` `difficulty:medium`
+
+> 📌 来源：[CSDN·2026前端面试题深度整理](https://blog.csdn.net/qq_39287602/article/details/159978296)
+
+**参考答案**：
+AI生成代码的质量评估不能只看"能不能跑"，需要多维度量化指标体系。
+
+**核心量化指标**：
+
+| 指标 | 度量方法 | 合格线 | 工具 |
+|------|---------|--------|------|
+| **圈复杂度（McCabe）** | 线性独立路径数 | ≤10 | eslint-plugin-complexity |
+| **可维护性指数（MI）** | `171 - 5.2×ln(Halstead) - 0.23×CC - 16.2×ln(LOC)` | ≥20（0-100分） | plato / ts-metrics |
+| **依赖耦合度** | 传入耦合+传出耦合 | 低耦合≤5 | dependency-cruiser |
+| **类型覆盖率** | TypeScript strict模式下any占比 | 0% | tsc --noImplicitAny |
+| **代码重复率** | Clone检测（Type 1-3） | <5% | jscpd |
+
+**自动化评估流水线**：
+```typescript
+// AI代码质量门禁
+interface CodeQualityReport {
+  cyclomaticComplexity: number  // 圈复杂度
+  maintainabilityIndex: number  // 可维护性指数
+  couplingScore: number         // 耦合度
+  typeCoverage: number          // 类型覆盖率
+  duplicationRate: number       // 重复率
+  lintErrors: number            // Lint错误数
+}
+
+async function evaluateAICode(code: string): Promise<CodeQualityReport> {
+  const ast = parseAST(code)
+  return {
+    cyclomaticComplexity: calculateMcCabe(ast),
+    maintainabilityIndex: calculateMI(ast),
+    couplingScore: analyzeCoupling(ast),
+    typeCoverage: await checkTypes(code),
+    duplicationRate: await detectClones(code),
+    lintErrors: await lint(code)
+  }
+}
+
+// 质量门禁判定
+function qualityGate(report: CodeQualityReport): 'pass' | 'warn' | 'fail' {
+  if (report.cyclomaticComplexity > 10) return 'fail'
+  if (report.maintainabilityIndex < 20) return 'fail'
+  if (report.typeCoverage < 0.95) return 'warn'
+  return 'pass'
+}
+```
+
+**AI代码特有问题**：
+- **幻觉代码**：调用了不存在的API → 需依赖类型检查+API Schema验证
+- **过度泛化**：生成了不必要的抽象层 → 圈复杂度+耦合度可检出
+- **安全漏洞**：eval/innerHTML/SQL拼接 → SAST静态扫描（Snyk/npm audit）
+
+**与Q10的关系**：Q10讲AI代码质量保障的流程（输入→过程→输出），本题讲质量度量的具体量化指标和自动化评估方案——是Q10"输出端"的工程化延伸。
 
 ---
 
@@ -1548,6 +1665,32 @@ const output = execution.getOutput('output')
 
 **与Q38的关系**：Q38讲前端向量数据库（transformers.js本地向量化），本题讲端侧推理——是前端AI本地化的两大技术路径（向量检索 vs 模型推理）。
 
+**👉 浏览器端运行轻量级LLM实践（WebGPU+Transformers.js+Gemma 2B）**（来源: [CSDN·2026前端面试题深度整理](https://blog.csdn.net/qq_39287602/article/details/159978296)）：
+WebGPU相比WebGL在端侧推理的核心优势：
+- **计算着色器（Compute Shader）**：WebGL只有顶点/片元着色器，需把ML计算伪装成纹理操作；WebGPU原生Compute Shader直接做矩阵运算
+- **显存直接访问**：WebGL需CPU↔GPU数据拷贝（readPixels阻塞），WebGPU的`mapAsync`可异步读取buffer
+- **并行吞吐提升10-50x**：Compute Shader支持上千线程组并行，WebGL受限于光栅化流水线
+
+```javascript
+// Transformers.js + WebGPU 运行 Gemma 2 2B
+import { pipeline } from '@xenova/transformers'
+
+// 自动检测并优先使用WebGPU后端
+const generator = await pipeline('text-generation', 'Xenova/gemma-2-2b-it', {
+  dtype: 'q4',           // 4bit量化，模型约1.2GB
+  device: 'webgpu',      // 优先WebGPU，fallback到WASM
+})
+
+const result = await generator('解释一下React的Fiber架构', {
+  max_new_tokens: 200,
+  temperature: 0.7,
+  do_sample: true,
+})
+console.log(result[0].generated_text)
+```
+
+**前端限制**：模型大小受限（浏览器内存上限）、首词延迟较高（模型加载10-30s）、兼容性（Chrome 113+，Safari/Firefox部分支持）。
+
 ---
 
 ### 2.2 AI Agent核心
@@ -1613,6 +1756,21 @@ AI Agent是能够感知环境、自主决策并执行动作以达成特定目标
 | Trade-off | 简单但可能出错 | 实用但步骤多 | 质量高但成本大 |
 
 **选择建议**：简单推理用CoT，需外部信息用ReAct，多方案比选用ToT。实际项目中常组合使用。
+
+**👉 Agent四种工作模式对比**（来源: [掘金·万字长文图解Agent面试题](https://juejin.cn/post/7628156003448553506)）：
+除ReAct外，Agent还有三种重要工作模式：
+
+| 模式 | 核心思路 | 适用场景 | Token消耗 |
+|------|---------|---------|----------|
+| **ReAct** | 推理+行动交替（Thought→Action→Observation循环） | 需要动态获取外部信息的任务 | 中 |
+| **Plan-and-Execute** | 先完整规划再逐步执行（Plan→Execute→Replan） | 多步骤复杂任务（旅行规划、项目分解） | 低（规划一次性） |
+| **Reflection** | 执行后反思评估，迭代优化（Act→Evaluate→Refine） | 需要质量保证的生成任务（代码编写、文案优化） | 高（多轮迭代） |
+| **Multi-Agent** | 多个专精Agent协作（分工→协作→汇总） | 大型复杂系统（代码审查、研究分析） | 最高 |
+
+**Plan-and-Execute vs ReAct**：
+- ReAct是"边想边做"，每步都调用LLM决策 → 灵活但Token高
+- Plan-and-Execute是"先想后做"，一次性规划所有步骤 → 省Token但不够灵活
+- 生产实践：简单任务用Plan-and-Execute，异常时降级到ReAct单步处理
 
 ---
 
@@ -1733,6 +1891,33 @@ Agent幻觉比普通LLM更危险，因为幻觉会触发真实行动。
 **面试追问**：
 - 什么时候需要多Agent？（单Agent能力不足、任务需多角色协作、安全性需隔离）
 - A2A和微服务架构有什么相似之处？（都是服务间通信，但A2A的"服务"是自治Agent）
+
+**👉 A2A协议核心概念与三层架构**（来源: [掘金·万字长文图解Agent面试题](https://juejin.cn/post/7628156003448553506)）：
+A2A协议不只是"Agent间通信"，它定义了完整的三层架构和核心概念：
+
+**三大核心概念**：
+| 概念 | 作用 | 类比 |
+|------|------|------|
+| **Agent Card** | Agent的能力描述卡片（能做什么、如何调用） | 微服务的API文档/Swagger |
+| **Task** | Agent间协作的最小单元（请求→执行→返回） | 微服务的RPC调用 |
+| **Artifact** | Task产生的交付物（文档/代码/数据） | 微服务的响应数据 |
+
+**三层架构**：
+```
+┌─────────────────────────────────┐
+│  能力层（Capability Layer）      │  Agent Card：声明能力、权限、协议
+├─────────────────────────────────┤
+│  连接层（Connection Layer）      │  Task：请求-响应、流式、长连接
+├─────────────────────────────────┤
+│  协作层（Collaboration Layer）   │  多Agent任务编排、冲突解决、结果聚合
+└─────────────────────────────────┘
+```
+
+- **能力层**：Agent注册时发布Agent Card，其他Agent据此发现和选择协作对象
+- **连接层**：Task的生命周期管理（created→running→completed/failed），支持同步和异步
+- **协作层**：多Agent间的任务分解、结果汇总、冲突仲裁
+
+**与MCP的互补**：A2A解决"谁做什么"（协作层），MCP解决"怎么做"（执行层）。完整架构：A2A负责任务分解与Agent调度 → 每个Agent内部通过MCP调用具体工具完成任务。
 
 **与Q70的区别**：Q70讲MCP与Function Calling的区别（侧重安全校验），本题讲A2A与MCP的层次关系——是多Agent架构的宏观视角。
 
@@ -2789,6 +2974,108 @@ Agent在调用外部工具时可能遇到多种失败场景，需要系统化的
 
 ---
 
+#### Q109: 多Agent协作模式有哪些？如何解决多Agent间的死锁和目标冲突？
+`tag:Agent架构` `tag:架构设计` `difficulty:hard`
+
+> 📌 来源：[CSDN·Agent面试全攻略](https://blog.csdn.net/likuoelie/article/details/157131154) + [CSDN·Agent面试题详解](https://blog.csdn.net/zhouzhupianbei/article/details/159465295)
+
+**参考答案**：
+多Agent协作的核心问题是"如何让多个自治Agent高效协作而不冲突"。
+
+**三种经典协作模式**：
+
+| 模式 | 原理 | 适用场景 | 缺点 |
+|------|------|---------|------|
+| **辩论式** | 多Agent对同一问题各自出方案，互相批评迭代，最终投票/加权取最优 | 需要多视角评估的决策（架构评审、风险评估） | Token消耗大，收敛速度慢 |
+| **层级式** | 主管Agent分解任务→分配给专家Agent→汇总结果 | 任务可明确拆分的场景（代码审查、数据处理流水线） | 单点故障（主管Agent出错则全局失败） |
+| **市场式** | Agent以"竞标"方式认领任务，按完成质量和效率结算"报酬" | 开放式众包任务（内容生成、数据标注） | 需要精心设计激励机制，可能出现"刷单" |
+
+**冲突解决机制**：
+
+1. **死锁**（A等B的结果，B等A的结果）：
+```python
+# 解决：引入超时+强制解除
+class AgentCoordinator:
+    def execute_with_deadlock_detection(self, agents, task):
+        timeout = 30  # 秒
+        for agent in agents:
+            result = agent.execute(task, timeout=timeout)
+            if result.status == 'DEADLOCK':
+                # 强制解除：给双方注入默认值
+                agent.inject_default(result.dependency_key)
+                agent.retry()
+```
+
+2. **信息过载**（Agent收到太多信息导致处理效率下降）：
+- 信息分级：只传递关键决策信息，过滤冗余上下文
+- 摘要压缩：长文档用LLM压缩为关键要点
+- 订阅机制：Agent只订阅自己关心的信息通道
+
+3. **目标冲突**（两个Agent的目标相互矛盾）：
+- 优先级排序：为每个Agent设定优先级，冲突时高优先级胜出
+- 人工仲裁：冲突无法自动解决时升级到人工决策
+- 约束求解：将冲突转化为约束满足问题（CSP），求最优解
+
+**与Q94的区别**：Q94讲A2A协议的通信机制（Agent间如何传消息），本题讲协作模式（Agent间如何分工）和冲突解决（协作出问题怎么办）——是协议之上的架构设计问题。
+
+---
+
+#### Q110: 如何设计多Agent代码审查系统？角色分工和协作流程是什么？
+`tag:Agent架构` `tag:架构设计` `difficulty:hard`
+
+> 📌 来源：[CSDN·Agent面试题详解](https://blog.csdn.net/zhouzhupianbei/article/details/159465295)
+
+**参考答案**：
+多Agent代码审查系统是层级式协作的典型应用，通过角色专业化提升审查质量。
+
+**角色设计**：
+| 角色 | 职责 | 审查重点 |
+|------|------|---------|
+| **SecurityAgent** | 安全审查 | XSS/SQL注入/敏感信息泄露/依赖漏洞 |
+| **PerformanceAgent** | 性能审查 | N+1查询/内存泄漏/大包体积/无用渲染 |
+| **StyleAgent** | 代码规范 | Lint规则/命名规范/类型安全/代码结构 |
+| **LogicAgent** | 业务逻辑 | 边界条件/竞态条件/错误处理/数据一致性 |
+| **CoordinatorAgent** | 汇总决策 | 合并各Agent意见、解决冲突、最终裁决 |
+
+**协作流程**：
+```python
+# AutoGen实现多Agent代码审查
+from autogen import AssistantAgent, GroupChat, GroupChatManager
+
+security_agent = AssistantAgent("SecurityAgent", 
+    system_message="你是安全审查专家，重点检查XSS/注入/泄露风险",
+    llm_config=llm_config)
+
+performance_agent = AssistantAgent("PerformanceAgent",
+    system_message="你是性能审查专家，重点检查N+1/内存泄漏/渲染优化",
+    llm_config=llm_config)
+
+style_agent = AssistantAgent("StyleAgent",
+    system_message="你是代码规范审查专家，重点检查Lint/命名/类型",
+    llm_config=llm_config)
+
+coordinator = AssistantAgent("CoordinatorAgent",
+    system_message="你是审查主管，汇总各专家意见，解决冲突，给出最终审查结论",
+    llm_config=llm_config)
+
+groupchat = GroupChat(agents=[security_agent, performance_agent, style_agent, coordinator],
+                      messages=[], max_round=6)
+
+manager = GroupChatManager(groupchat=groupchat, llm_config=llm_config)
+
+# 发起审查
+user_proxy.initiate_chat(manager, 
+    message=f"请审查以下代码：\n```javascript\n{code_to_review}\n```")
+```
+
+**冲突解决**：
+- 两个Agent意见矛盾时（如SecurityAgent要求加验证，PerformanceAgent认为影响性能），由CoordinatorAgent根据优先级裁决
+- 安全问题优先级 > 逻辑正确 > 性能 > 规范
+
+**与Q109的关系**：Q109讲多Agent协作模式的理论框架，本题是多Agent协作在代码审查场景的具体落地——是层级式模式的工程实践。
+
+---
+
 ### 3.5 Agent工程边界与评估
 
 #### Q82: 如何设计高质量的Function Calling工具描述（Schema设计）？防乱调用的负向约束技巧
@@ -2944,6 +3231,43 @@ class AgentTracer {
 - 还是LLM总结时偏离了？（查output span的prompt和response）
 
 **与Q42的区别**：Q42讲AI性能监控指标侧重前端TTFT/Token速度，本题侧重Agent执行全链路的Trace和回放——是"诊断"而非"监控"。
+
+**👉 Agent可观测性与成本控制**（来源: [CSDN·Agent面试全攻略](https://blog.csdn.net/likuoelie/article/details/157131154)）：
+可观测性不只是"看Trace"，还必须控制Agent的运行成本——Agent自主决策容易导致Token爆炸。
+
+**成本控制三板斧**：
+
+1. **Token限额**：为每次Run设置Token上限，超限自动截断
+```javascript
+class TokenLimiter {
+  constructor(maxTokens = 50000) {
+    this.maxTokens = maxTokens
+    this.consumed = 0
+  }
+  
+  async callLLM(prompt) {
+    const estimated = estimateTokens(prompt) // 粗估输入Token
+    if (this.consumed + estimated > this.maxTokens) {
+      throw new Error(`Token budget exceeded: ${this.consumed}/${this.maxTokens}`)
+    }
+    const response = await llm.generate(prompt)
+    this.consumed += response.usage.total_tokens
+    return response
+  }
+}
+```
+
+2. **语义缓存**：相似请求命中缓存，避免重复调用LLM
+- 对请求做语义哈希（Embedding→量化→Bloom Filter）
+- 命中缓存时直接返回，0 Token消耗
+- 适合高频重复场景（FAQ、模板生成）
+
+3. **可观测工具链**：
+| 工具 | 功能 | 适用场景 |
+|------|------|---------|
+| LangSmith | Trace可视化+Prompt版本管理+成本看板 | LangChain生态 |
+| OpenTelemetry | 通用链路追踪标准，可接入任意框架 | 多语言/多框架混合 |
+| Langfuse | 开源LLM可观测平台，Token用量分析 | 需私有化部署 |
 
 ---
 
@@ -3849,9 +4173,14 @@ function safeJsonParse(str) {
 | 44 | AI Agent面试必问：写周报Agent | 掘金 | https://juejin.cn/post/7620738055741816875 |
 | 45 | Agent/大模型大厂面试题汇总 | 卡码笔记 | https://notes.kamacoder.com/interview/llm/agent_interview.html |
 | 46 | 前端+AI面试题真题 | 牛客 | https://www.nowcoder.com/feed/main/detail/0be454f3836b44bab988cc3c1130b5e1 |
+| 47 | 万字长文图解Agent面试题（ReAct/MCP/Skills/A2A） | 掘金 | https://juejin.cn/post/7628156003448553506 |
+| 48 | 2026前端面试题深度整理（WebGPU+RAG+LangChain.js） | CSDN | https://blog.csdn.net/qq_39287602/article/details/159978296 |
+| 49 | 26年前端面试AI变化 | 编程导航 | https://www.codefather.cn/post/2044302098463485953 |
+| 50 | Agent面试全攻略（多Agent协作+容错+可观测性） | CSDN | https://blog.csdn.net/likuoelie/article/details/157131154 |
+| 51 | Agent面试题详解（写周报Agent+多Agent代码审查） | CSDN | https://blog.csdn.net/zhouzhupianbei/article/details/159465295 |
 
 ---
 
 > 本题库由自动化爬取任务生成维护，如需更新请运行定时爬取任务。
 > 
-> **版本历史**：v1.0 (2026-04-09, 18题) → v2.0 (2026-04-10, 47题) → v2.1 (2026-04-13, 67题，新增天猫面经5题) → v2.2 (2026-04-13, 70题，新增3道独有题+5道视角互补合并) → v2.3 (2026-04-13, 72题，微信公众号新增2道独有题+3道视角互补合并) → v2.4 (2026-04-14, 76题，新增4道独有题Q73-Q76+3道视角互补合并到Q10/Q30/Q71) → v2.5 (2026-04-14, 81题，小红书新增5道独有题Q77-Q81) → v2.6 (2026-04-14, 81题，全部题目补充📌来源标注+链接) → v2.7 (2026-04-15, 87题，新增6道独有题Q82-Q87+3道视角互补合并到Q31/Q46/Q76) → v2.8 (2026-04-16, 97题，新增10道独有题Q88-Q97+4道视角互补合并到Q6/Q29/Q70/Q55) → v2.9 (2026-04-17, 100题，新增3道独有题Q98-Q100+4道视角互补合并到Q10/Q13/Q42/Q57) → v3.0 (2026-04-20, 106题，新增7道独有题Q101-Q107，Q17待补充)
+> **版本历史**：v1.0 (2026-04-09, 18题) → v2.0 (2026-04-10, 47题) → v2.1 (2026-04-13, 67题，新增天猫面经5题) → v2.2 (2026-04-13, 70题，新增3道独有题+5道视角互补合并) → v2.3 (2026-04-13, 72题，微信公众号新增2道独有题+3道视角互补合并) → v2.4 (2026-04-14, 76题，新增4道独有题Q73-Q76+3道视角互补合并到Q10/Q30/Q71) → v2.5 (2026-04-14, 81题，小红书新增5道独有题Q77-Q81) → v2.6 (2026-04-14, 81题，全部题目补充📌来源标注+链接) → v2.7 (2026-04-15, 87题，新增6道独有题Q82-Q87+3道视角互补合并到Q31/Q46/Q76) → v2.8 (2026-04-16, 97题，新增10道独有题Q88-Q97+4道视角互补合并到Q6/Q29/Q70/Q55) → v2.9 (2026-04-17, 100题，新增3道独有题Q98-Q100+4道视角互补合并到Q10/Q13/Q42/Q57) → v3.0 (2026-04-20, 106题，新增7道独有题Q101-Q107，Q17待补充) → v3.1 (2026-04-21, 110题，新增4道独有题Q108-Q111+4道增量补充到Q30/Q85/Q93/Q94)
