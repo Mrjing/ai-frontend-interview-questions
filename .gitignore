@@ -8,7 +8,11 @@ articles/
 # 临时文件
 tmall_article.png
 *.tmp
+*.zip
 .DS_Store
+
+# 内部工具脚本（含敏感业务逻辑）
+scripts/gmail_boss_sync.sh
 
 # IDE 配置
 .vscode/
