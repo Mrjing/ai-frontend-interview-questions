@@ -1,6 +1,6 @@
 # AI 前端开发面试题库
 
-> **版本**: v3.6 | **更新日期**: 2026-04-29 | **题目总数**: 147
+> **版本**: v3.7 | **更新日期**: 2026-04-30 | **题目总数**: 154
 >
 > 本题库整合自掘金、知乎、牛客、CSDN、小红书等平台的最新面经，聚焦AI前端/全栈开发方向。
 >
@@ -8016,6 +8016,655 @@ Fine-tuning MoE 注意事项：
 
 ---
 
+#### Q149: LLM流式输出中Markdown代码块/公式被截断时如何避免渲染闪烁？
+`tag:SSE/流式输出` `tag:Markdown渲染` `difficulty:medium`
+
+> 📌 来源：[牛客·阿里云AI应用开发前端一面](https://www.nowcoder.com/feed/main/detail/cbefd28f5deb40efb773da3a67c10089)
+
+**问题**：在处理LLM返回的Markdown流时，当代码块或数学公式在流式传输过程中被截断（如只收到 ```python 但还没收到闭合的 ```），如何解决渲染器因不完整语法导致的闪烁/白屏问题？
+
+**参考答案**：
+
+1. **流式容错解析策略**：
+   - 使用支持增量解析的Markdown引擎（如 `markdown-it` + 自定义插件），对流式chunk做**增量AST构建**
+   - 未闭合的代码块标记为 `incomplete` 状态，暂不触发高亮渲染，用纯文本或灰色占位展示
+
+2. **防抖+虚拟DOM优化**：
+   - 对流式更新做 **requestAnimationFrame (rAF) 批量合并**，避免每收到一个token就触发全量re-render
+   - 用 `React.memo` / `useMemo` 包裹代码块组件，只有当代码块**完整闭合后**才触发SyntaxHighlighter重渲染
+
+3. **渐进式渲染架构**：
+   ```
+   流入Token → TokenBuffer(累积) → ChunkParser(按\n\n分块) → BlockRenderer
+                                                    ↓
+                                          ┌─────────┴──────────┐
+                                     完整块(立即渲染)   不完整块(占位+等待)
+   ```
+   - 不完整块显示为"正在输入..."的骨架屏或半透明态，待闭合后替换为正式渲染结果
+
+4. **具体实现要点**：
+   ```javascript
+   // 追踪未闭合的代码块状态
+   const pendingBlocks = useRef(new Map()); // key: blockIndex, value: rawText
+   
+   function processStreamChunk(newText) {
+     const blocks = parseMarkdownBlocks(fullText);
+     return blocks.map((block, i) => {
+       if (block.type === 'code' && !block.closed) {
+         return <CodeBlockPlaceholder key={i} language={block.lang} />;
+       }
+       return <RenderedBlock key={i} block={block} />;
+     });
+   }
+   ```
+
+> 💡 **与现有题目关系**：Q3(AI长文本渲染性能)和Q118(Chunk合并)分别从性能和算法角度覆盖了流式处理，但本题聚焦于**流式Markdown结构化内容截断时的UI稳定性**——这是AI聊天产品中最高频的前端体验问题之一。
+
+---
+
+#### Q150: 前端/Web应用如何接入MCP协议？Streamable HTTP模式的工作原理是什么？
+`tag:MCP` `tag:Function-Calling` `tag:架构设计` `difficulty:hard`
+
+> 📌 来源：[JavaGuide·万字拆解MCP协议](https://javaguide.cn/ai/agent/mcp.html) + [AgentGuide高频题库](https://adongwanai.github.io/AgentGuide/interview/hot/)（频次:12）
+
+**问题**：MCP协议有stdio和Streamable HTTP两种传输方式，前端Web应用应该选择哪种？请描述前端作为MCP Client接入MCP Server的完整流程。
+
+**参考答案**：
+
+**1. 传输方式选择：必须用 Streamable HTTP**
+
+| 方式 | 原理 | 适用场景 | 前端可用性 |
+|------|------|---------|-----------|
+| **stdio** | 标准输入输出管道，Host启动Server为子进程 | 本地IDE插件(Claude Desktop, Cursor) | ❌ 浏览器无法使用 |
+| **Streamable HTTP** | 单端点 `POST /mcp`，JSON-RPC over HTTP + SSE流 | Web应用、云端部署、团队共享 | ✅ **前端唯一选择** |
+
+**2. Streamable HTTP 工作原理**：
+
+```
+┌────── Frontend (Browser) ──────┐      ┌──── MCP Server (Cloud) ────┐
+│                                 │      │                             │
+│  MCP Client (fetch/POST)        │ ──→  │  POST /mcp                 │
+│  {                            │      │  JSON-RPC Request          │
+│    "jsonrpc":"2.0",           │      │  {                         │
+│    "id": 1,                   │      │    "method": "tools/call", │
+│    "method": "tools/list"     │      │    "params": {...}         │
+│  }                           │      │  }                         │
+│                                 │ ←──  │  JSON-RPC Response         │
+│  Response:                    │ SSE   │  或 SSE stream (进度推送)  │
+│  { tools: [...] }            │      │                             │
+└─────────────────────────────────┘      └─────────────────────────────┘
+```
+
+**3. 前端接入核心代码**：
+```typescript
+// MCP Client for Browser (Streamable HTTP)
+class McpClient {
+  private endpoint: string;
+  private headers: HeadersInit;
+
+  constructor(serverUrl: string, authToken?: string) {
+    this.endpoint = `${serverUrl}/mcp`; // 单端点
+    this.headers = {
+      'Content-Type': 'application/json',
+      ...(authToken && { Authorization: `Bearer ${authToken}` }),
+    };
+  }
+
+  // 列出所有可用工具
+  async listTools(): Promise<Tool[]> {
+    const res = await fetch(this.endpoint, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'tools/list', params: {},
+      }),
+    });
+    const { result } = await res.json();
+    return result.tools;
+  }
+
+  // 调用工具（支持SSE流式响应）
+  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+    const res = await fetch(this.endpoint, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 2,
+        method: 'tools/call',
+        params: { name, arguments: args },
+      }),
+    });
+
+    // 处理普通JSON响应或SSE流
+    const contentType = res.headers.get('content-type');
+    if (contentType?.includes('text/event-stream')) {
+      return this.consumeSSEStream(res.body); // 流式消费
+    }
+    return res.json(); // 普通响应
+  }
+
+  private async consumeSSEStream(body: ReadableStream): Promise<unknown> {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let result = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      result += decoder.decode(value, { stream: true });
+      // 逐event解析 data: ...\n\n 格式
+    }
+    return parseSSE(result);
+  }
+}
+```
+
+**4. 关键工程细节**：
+- **CORS配置**：MCP Server需配置 `Access-Control-Allow-Origin` 允许前端域名
+- **鉴权**：每个请求携带 `Authorization` Header（Bearer Token）
+- **能力发现(Disclosure)**：前端启动时先调用 `tools/list` 和 `resources/list` 获取可用能力，动态生成UI
+- **错误码**：`-32004`(Resource too large)、`-32602`(Invalid params) 等标准错误需友好展示
+
+> 💡 **与现有题目关系**：Q66(MCP基础)、Q70(MCP安全校验)、Q94(A2A vs MCP) 已覆盖MCP概念层，但**缺少前端/Web视角的具体接入实现**。本题填补了"MCP在前端怎么用"这一实践空白。
+
+---
+
+#### Q151: 什么是渐进式披露(Progressive Disclosure)？如何用它优化Agent系统的Token消耗？
+`tag:Agent架构` `tag:Prompt-Engineering` `difficulty:medium`
+
+> 📌 来源：[JavaGuide·万字详解Agent Skills](https://javaguide.cn/ai/agent/skills.html)
+
+**问题**：Skills机制中的渐进式披露是什么？它与传统的Prompt全量注入有什么区别？请设计一个三层渐进式披露架构。
+
+**参考答案**：
+
+**1. 问题背景**：传统方式将所有System Prompt、工具说明、领域知识一次性塞入Context Window，导致：
+- Token消耗巨大（可能占窗口50%+）
+- 长对话时早期指令被压缩遗忘
+- 注入了大量当前轮次不需要的知识
+
+**2. 渐进式披露三层架构**：
+
+```
+┌─────────────────────────────────────────────────┐
+│              Context Window (128K tokens)         │
+├──────────┬──────────────┬────────────────────────┤
+│ L1 元数据 │ L2 正文      │ L3 资源               │
+│ (常驻)   │ (按需加载)   │ (隔离)                │
+│          │              │                        │
+│ • Skill  │ • 完整指令   │ • 参考文档             │
+│   名称   │ • 执行步骤   │ • 代码示例             │
+│   触发词 │ • 示例       │ • 大文件数据           │
+│   一行描 │ • 边界条件   │                        │
+│   述     │              │                        │
+│ ~50条×   │ 仅当Skill    │ 通过Function Calling   │
+│ ~20token │ 被激活时     │ 或MCP Resource按需读取 │
+│ =1K token│ 动态注入     │ 不占用上下文窗口        │
+└──────────┴──────────────┴────────────────────────┘
+```
+
+**3. 各层设计原则**：
+
+| 层级 | 内容 | 加载时机 | Token预算 |
+|------|------|---------|----------|
+| **L1 元数据(Metadata)** | Skill名称、触发意图(何时使用)、一句话描述 | 会话开始时全部常驻 | ~1K tokens (约50个skills × 20t) |
+| **L2 正文(Body)** | 完整执行指令、步骤、示例、边界条件 | LLM判断需要该Skill时动态注入 | 每次激活~500-2K tokens |
+| **L3 资源(Resources)** | 参考文档、大文件、数据库查询结果 | 仅当具体执行需要时通过MCP/FC读取 | 不占Context Window |
+
+**4. 前端参与角度**：
+```typescript
+// 前端维护Skill激活状态的可视化
+interface SkillState {
+  name: string;           // 来自L1元数据
+  status: 'dormant' | 'loading' | 'active' | 'executing';
+  tokenCost?: number;     // 当前消耗的Token数
+  l2InjectedAt?: number;  // L2注入时间戳
+}
+
+// UI展示：哪些Skills已激活、各占多少Token
+function SkillPanel({ skills }: { skills: SkillState[] }) {
+  return (
+    <div className="skill-panel">
+      {skills.map(s => (
+        <SkillBadge
+          key={s.name}
+          status={s.status}
+          onClick={() => toggleSkill(s.name)} // 用户可手动激活/停用
+        />
+      ))}
+      <div className="token-meter">
+        总计: {calculateTotalTokens(skills)} / 128K
+      </div>
+    </div>
+  );
+}
+```
+
+**5. 效果量化**：相比全量注入，渐进式披露可降低 **60-90%** 的基线Token消耗（取决于Skill数量）。
+
+> 💡 **与现有题目关系**：Q106(Skills vs System Prompt)涉及Skills概念但未深入渐进式披露机制；Q143(结构化Prompt Attention机制)从模型角度分析Prompt效率。本题从**工程架构角度**提供Token优化的系统方案，是一个新的细分考点。
+
+---
+
+#### Q152: LangChain的默认Memory机制在多用户并发场景下如何做隔离？线程安全性如何保证？
+`tag:记忆管理` `tag:Agent架构` `difficulty:hard`
+
+> 📌 来源：[AgentGuide高频题库](https://adongwanai.github.io/AgentGuide/interview/hot/)（频次:6，来源：蚂蚁集团·通用题库·百度）
+
+**问题**：在使用LangChain构建多用户Agent平台时，LangChain默认的Memory机制（如ConversationBufferMemory）存在什么并发安全隐患？如何设计多租户内存隔离方案？
+
+**参考答案**：
+
+**1. 默认Memory的安全隐患**：
+
+```python
+# ⚠️ 危险写法：全局共享Memory实例
+memory = ConversationBufferMemory()  # 单例！
+
+chain = LLMChain(llm=llm, prompt=prompt, memory=memory)
+# 用户A的对话会泄漏给用户B！
+```
+
+**隐患清单**：
+
+| 隐患类型 | 风险 | 场景 |
+|---------|------|------|
+| **跨用户串话** | 用户A看到用户B的历史消息 | 共享同一个Memory实例 |
+| **并发竞态写入** | 两条消息同时append导致丢失 | 异步高并发请求 |
+| **Context Window溢出** | 多用户共享Token预算 | 单一Memory无限增长 |
+| **Session混淆** | WebSocket断连重连后Session错配 | 无Session绑定机制 |
+
+**2. 多租户Memory隔离方案**：
+
+```typescript
+// 方案一：基于Session ID的Memory工厂（推荐）
+class MultiTenantMemoryFactory {
+  private memories = new Map<string, BaseMemory>();
+
+  getMemory(sessionId: string): BaseMemory {
+    if (!this.memories.has(sessionId)) {
+      this.memories.set(sessionId, new ConversationBufferMemory({
+        returnMessages: true,
+        maxTokenLimit: 2000, // 单用户上限
+      }));
+    }
+    return this.memories.get(sessionId)!;
+  }
+
+  // 清理过期Session（LRU淘汰）
+  cleanup(maxSessions = 10000) {
+    if (this.memories.size > maxSessions) {
+      const oldest = this.memories.keys().next().value;
+      this.memories.delete(oldest);
+    }
+  }
+}
+
+// 使用方式：每次请求从JWT/Cookie提取sessionId
+app.post('/chat', async (req, res) => {
+  const sessionId = req.auth.sessionId; // 从认证信息获取
+  const memory = memoryFactory.getMemory(sessionId);
+  
+  const chain = new LLMChain({ llm, prompt, memory });
+  const response = await chain.invoke({ input: req.body.message });
+  res.json(response);
+});
+```
+
+**3. 线程安全保障（Node.js/前端BFF场景）**：
+
+```typescript
+// Node.js单线程但异步操作存在微任务竞态
+// 解决方案：Promise队列化 + Mutex
+
+import { AsyncMutex } from 'async-mutex';
+
+class SessionMutexManager {
+  private mutexes = new Map<string, AsyncMutex>();
+
+  async runExclusive<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
+    let mutex = this.mutexes.get(sessionId);
+    if (!mutex) {
+      mutex = new AsyncMutex();
+      this.mutexes.set(sessionId, mutex);
+    }
+    return mutex.acquire().then(release => fn().finally(release));
+  }
+}
+
+// 使用
+await sessionMutex.runExclusive(sessionId, async () => {
+  // 同一Session的消息串行处理，防止竞态
+  await memory.saveContext({ input }, { output });
+});
+```
+
+**4. 分布式场景扩展**（多实例部署）：
+- Memory持久化到Redis：`RedisChatMessageHistory(sessionId)`
+- 用Redis事务（MULTI/EXEC）保证原子性
+- Session Sticky或一致性Hash确保同一用户的请求路由到同一实例
+
+> 💡 **与现有题目关系**：Q140(向量记忆vs RAG)、Q141(BufferMemory选型)、Q142(LangGraph记忆管理) 覆盖了Memory类型对比，但**缺少多租户并发隔离这一生产环境关键问题**。这是从Demo到生产落地的必考跨越点。
+
+---
+
+#### Q153: 当Agent调用工具不正确时（参数错误、选错工具），除了Prompt优化外还有什么系统性解决方法？
+`tag:Agent架构` `tag:Function-Calling` `difficulty:hard`
+
+> 📌 来源：[AgentGuide高频题库](https://adongwanai.github.io/AgentGuide/interview/hot/)（频次:5，来源：阿里巴巴·字节跳动·通用题库）
+
+**问题**：在实际Agent落地中，经常出现LLM生成的Function Calling参数格式错误、选错了工具等问题。除了优化System Prompt外，有哪些系统性的技术手段可以改善？
+
+**参考答案**：
+
+**1. 五层纠错体系（由轻到重）**：
+
+```
+Layer 5: SFT微调          ← 最重，改模型行为（效果最好成本最高）
+Layer 4: RLHF/DPO强化学习  ← 用奖励信号引导正确调用
+Layer 3: Few-shot Examples ← 在Prompt中放正确的调用示例
+Layer 2: Schema约束+校验   ← Zod/Pydantic强制校验+自动修复
+Layer 1: 重试+Self-Correct  ← 最轻，让LLM自己纠正
+```
+
+**2. 各层详细方案**：
+
+**Layer 1: 重试机制 (Self-Correction Loop)**
+```python
+def call_tool_with_retry(agent, query, max_retries=3):
+    for attempt in range(max_retries):
+        response = agent.invoke(query)
+        tool_calls = extract_tool_calls(response)
+        
+        # 校验Tool Call合法性
+        validation = validate_tool_calls(tool_calls)
+        if validation.valid:
+            return execute_tools(tool_calls)
+        
+        # 将错误信息反馈给LLM让其自纠
+        error_msg = f"工具调用错误: {validation.error}. 请重新生成正确的调用."
+        query = f"{query}\n\n上次尝试出错: {error_msg}"
+    
+    return fallback_response(query)
+```
+
+**Layer 2: Schema约束 + 自动修复**
+```typescript
+import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
+const SearchSchema = z.object({
+  query: z.string().min(1).max(200),
+  limit: z.number().int().min(1).max(100).default(10),
+});
+
+// 生成严格的JSON Schema传给LLM
+const toolDefinition = {
+  name: 'search',
+  description: '搜索知识库',
+  parameters: zodToJsonSchema(SearchSchema), // 强约束
+};
+
+// 收到LLM输出后校验+修复
+function validateAndFix(input: unknown) {
+  const result = SearchSchema.safeParse(input);
+  if (result.success) return result.data;
+  
+  // 自动修复常见问题
+  const fixed = {
+    ...input,
+    limit: Math.min(Math.max(1, input?.limit || 10), 100),
+    query: String(input?.query || '').slice(0, 200),
+  };
+  return SearchSchema.parse(fixed); // 二次校验
+}
+```
+
+**Layer 3: Few-shot Dynamic Selection**
+```typescript
+// 不是静态写死示例，而是动态匹配最相关的few-shot
+const fewShotExamples = {
+  search: [
+    { input: "查一下Vue性能优化", expectedCall: { tool: 'search', args: { query: 'Vue performance optimization' } } },
+    { input: "最近的文章", expectedCall: { tool: 'search', args: { query: '', limit: 5 } } },
+  ],
+  codegen: [ /* ... */ ],
+};
+
+// 根据用户意图匹配最相关示例注入Prompt
+function selectFewShots(intent: string): Example[] {
+  const matchedTool = classifyIntent(intent); 
+  return fewShotExamples[matchedTool].slice(0, 3); // 取top-3
+}
+```
+
+**Layer 4: DPO偏好优化**
+```
+收集三元组: (query, bad_tool_call, good_tool_call)
+训练DPO模型使其偏好good_call而非bad_call
+无需训练奖励模型，比RLHF更简单
+```
+
+**Layer 5: SFT数据构造与微调**
+```
+数据来源: 真实用户交互日志中筛选出的bad case
+构造: (user_query, correct_tool_call_chain) 对
+微调: 只调LoRA adapter，保持base model不变
+评估: tool_call_accuracy > 95% 后上线
+```
+
+**3. 前端可参与的层面**：
+- Layer 1/2: 前端可以做**客户端校验**（Zod schema预校验）、**错误提示UI**（展示哪一步出错了）
+- 实时展示Agent的Tool Call过程，让用户可以看到并手动干预错误的调用
+
+> 💡 **与现有题目关系**：Q30(ReAct vs Tool Calling防死循环三板斧) 覆盖了基础的防循环机制；Q147(依赖投毒检测) 覆盖安全角度。本题从**工具调用准确性提升的方法论体系**切入，提供了一个完整的技术栈选型路线图。
+
+---
+
+#### Q154: Agent的记忆系统中，如何设计"记忆衰退"机制来避免过时的历史信息干扰当前任务？
+`tag:记忆管理` `tag:Agent架构` `difficulty:medium`
+
+> 📌 来源：[AgentGuide高频题库](https://adongwanai.github.io/AgentGuide/interview/hot/)（频次:7，来源：阿里巴巴·字节跳动·通用题库）
+
+**问题**：长期运行的Agent会积累大量历史记忆，其中部分信息可能已过时或与当前任务无关。如何设计记忆衰退(Memory Decay)机制？
+
+**参考答案**：
+
+**1. 为什么需要记忆衰退**：
+
+人类大脑天然有遗忘曲线——这其实是特性不是bug。Agent同理：
+- **过时信息干扰**：3个月前的项目需求变化了，但旧记忆还在影响决策
+- **Context Window有限**：旧记忆挤占了新信息的空间
+- **注意力分散**：太多无关记忆降低推理质量
+
+**2. 三层记忆衰退架构**：
+
+```
+┌────────────────────────────────────────────┐
+│              记忆生命周期管理                │
+├──────────┬──────────┬──────────────────────┤
+│ 感知记忆  │ 短期记忆   │ 长期记忆             │
+│ (Working)│ (Short)   │ (Long-term)         │
+│          │           │                     │
+│• 当前对话  • 近N轮对话  • 用户画像             │
+│• TTL:分钟  • TTL:小时  • 项目知识库            │
+│• 自动衰减  • 滑动窗口   │ 定期归档+衰减        │
+│          │           │                     │
+│ ↓ 溢出即忘 │ ↓ 转存长期  │ ↓ 重要性加权衰减     │
+└──────────┴──────────┴──────────────────────┘
+```
+
+**3. 具体衰退策略**：
+
+**策略A：时间衰减 (Time Decay)**
+```typescript
+interface MemoryEntry {
+  content: string;
+  createdAt: number;
+  importance: number; // 0-1, 由LLM评估
+  accessCount: number; // 被检索次数越多越重要
+}
+
+// 衰退分数 = 重要性 × 访问热度 × 时间衰减
+function decayScore(entry: MemoryEntry, now: number): number {
+  const ageHours = (now - entry.createdAt) / (1000 * 60 * 60);
+  const timeDecay = Math.exp(-ageHours / 720); // 半衰期30天
+  const recencyBoost = Math.log(1 + entry.accessCount);
+  return entry.importance * recencyBoost * timeDecay;
+}
+
+// 分数低于阈值 → 归档或删除
+const RETENTION_THRESHOLD = 0.15;
+```
+
+**策略B：相关性过滤 (Relevance Filtering)**
+```typescript
+// 检索时不只看相似度，还要考虑时效性
+async function retrieveMemories(query: string, topK: number = 10) {
+  const candidates = await vectorStore.similaritySearch(query, topK * 3);
+  
+  // 过滤掉低相关性+陈旧的记忆
+  return candidates
+    .map(entry => ({
+      ...entry,
+      score: similarity(query, entry.content) * decayScore(entry, Date.now()),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK);
+}
+```
+
+**策略C：摘要压缩 (Summarization)**
+```typescript
+// 长期记忆定期摘要化（类似人类形成"经验"而非记住每个细节）
+async function consolidateOldMemories() {
+  const staleEntries = await findStaleEntries({ olderThan: '30d' });
+  
+  // 按主题聚类后用LLM生成摘要
+  const clusters = clusterByTopic(staleEntries);
+  for (const cluster of clusters) {
+    const summary = await llm.generate([
+      { role: 'system', content: '将以下记忆压缩为关键要点的摘要' },
+      { role: 'user', content: cluster.map(e => e.content).join('\n') }
+    ]);
+    
+    // 用摘要替代原始条目（节省90%+空间）
+    await replaceWithSummary(cluster, summary);
+  }
+}
+```
+
+**4. 前端可视化**：
+- 记忆浏览器面板：用户可查看/编辑/删除自己的Agent记忆
+- 记忆健康度指标："当前有效记忆 847条 | 已归档 2341条 | 即将衰退 56条"
+- 手动pin重要记忆（阻止衰退）
+
+> 💡 **与现有题目关系**：Q42(前端记忆精简规则+遗忘策略) 涉及遗忘概念但较简略；Q140/Q141/Q142 覆盖Memory选型。本题提供了**完整的记忆衰退工程实现方案**，包括衰减函数设计、相关性过滤、摘要压缩三个层次。
+
+---
+
+#### Q155: Human Feedback（人类反馈）是如何被Agent消化吸收的？RL策略更新闭环如何工作？
+`tag:Agent架构` `tag:大模型原理` `difficulty:hard`
+
+> 📌 来源：[AgentGuide高频题库](https://adongwanai.github.io/AgentGuide/interview/hot/)（频次:11，来源：阿里巴巴·通用题库·字节跳动）
+
+**问题**：在Agent系统中，用户对Agent输出的修正/反馈（Human Feedback）如何被系统性地收集和处理？能否结合RL（强化学习）来做策略更新？
+
+**参考答案**：
+
+**1. Human Feedback的类型与采集**：
+
+| 反馈类型 | 采集时机 | 数据形式 | 示例 |
+|---------|---------|---------|------|
+| **显式评分** | 任务完成后 | 1-5分/👍👎 | "这个回答有用吗？" |
+| **隐式行为** | 交互过程中 | 点击/采纳/修改 | 用户采纳了建议→正反馈；修改了输出→负反馈 |
+| **修正编辑** | 用户不满意时 | 原始输出→修改后输出 | Agent写的代码被用户改了→diff就是负样本 |
+| **比较排序** | A/B测试时 | A优于B的偏好对 | "这两个回答哪个更好？" |
+
+**2. Feedback → RL策略更新的完整链路**：
+
+```
+用户反馈采集 → 数据标注 → Reward Model训练 → PPO/DPO策略优化 → 新Agent上线
+     ↑                                                                              ↓
+     └────────────────── 在线服务收集更多反馈 ←─────────────────────────────────────┘
+```
+
+**3. RLHF在Agent场景的特殊性**：
+
+普通LLM的RLHF是针对"回答质量"，而Agent的RLHF针对的是**决策质量**：
+
+```python
+# 传统RLHF reward: 回答是否好？
+reward_text_quality = rm.score(prompt, response)
+
+# Agent-specific reward: 决策链条是否正确？
+def agent_reward(trace: ExecutionTrace) -> float:
+    rewards = []
+    for step in trace.steps:
+        # 工具选择是否合理
+        rewards.append(tool_selection_score(step))
+        # 参数是否正确
+        rewards.append(param_accuracy_score(step))  
+        # 最终结果是否满足用户意图
+        rewards.append(outcome_score(step.user_intent, step.result))
+        # 步骤数是否精简（少而好）
+        rewards.append(-0.01 * step.token_cost)  # 惩罚冗余
+    
+    return weighted_sum(rewards, weights=[0.3, 0.2, 0.4, 0.1])
+```
+
+**4. DPO（Direct Preference Optimization）替代方案**：
+
+DPO无需训练Reward Model，直接用偏好对优化：
+```
+收集数据:
+  chosen = "用户采纳的Agent输出"
+  rejected = "用户修改后的版本 或 Agent的另一个差版本"
+
+DPO损失:
+  loss = -E[log σ(β(log π(chosen|x) - log π(rejected|x)))]
+
+优势:
+  - 不需要单独训练Reward Model（省大量标注成本）
+  - 直接在SFT模型上微调即可
+  - 对小规模Agent团队更实用
+```
+
+**5. 前端在Feedback闭环中的角色**：
+
+```tsx
+// 嵌入式反馈组件
+function FeedbackInline({ agentOutput }: Props) {
+  return (
+    <div className="agent-output">
+      <Markdown content={agentOutput.text} />
+      <div className="feedback-bar">
+        <ThumbsUpButton onClick={() => submitFeedback({ type: 'thumb_up', outputId })} />
+        <ThumbsDownButton onClick={() => submitFeedback({ type: 'thumb_down', outputId })}>
+          {/* 下拉选择原因 */}
+          <ReasonSelect options={['事实错误','遗漏信息','格式不好','其他']} />
+        </ThumbsDownButton>
+        <EditButton onClick={() => enableEditMode()}>
+          用户修改后的版本自动成为preferred sample
+        </EditButton>
+      </div>
+    </div>
+  );
+}
+```
+
+**6. Online Learning（在线学习）闭环**：
+```
+Agent V1 上线 → 收集1周反馈数据 → 筛选高质量偏好对 → DPO微调 → Agent V1.1 部署
+                                                                      ↓
+                                              A/B Test (50%流量V1 vs 50% V1.1)
+                                                                      ↓
+                                              统计满意度提升 → 全量发布V1.1
+```
+
+> 💡 **与现有题目关系**：Q148(Agent微调SFT数据集收集与LoRA训练) 涉及微调但偏SFT方向；Q46(Prompt Injection防御) 涉及安全。本题从**Human Feedback到RL策略更新的完整闭环**切入，涵盖了数据采集、奖励设计、DPO/PPO选型、在线学习等维度——是Agent工程化的高阶综合题。
+
+---
+
 ## 附录
 
 ### 面试趋势总结（2026）
@@ -8052,6 +8701,12 @@ Fine-tuning MoE 注意事项：
 24. **Skills模块化知识注入** ⬆️：Skills vs System Prompt——按需激活教方法论vs全局加载教格式
 25. **RAG工程化细节深化** ⬆️：检索冲突处理（元数据加权+多Agent辩论）、权限隔离（ACL元数据+身份Filter）、动态更新（路由决策+流式索引+缓存失效）
 26. **Agent工具调用降级策略** ⬆️：错误分类（5类）+降级路径（主API→备用→缓存→人工）
+27. **MCP Streamable HTTP前端接入**⭐🆕：stdio vs Streamable HTTP选型、单端点JSON-RPC、SSE流式消费、CORS+鉴权
+28. **渐进式披露Token优化架构**⭐🆕：L1元数据常驻→L2正文按需激活→L3资源隔离，降低60-90%基线Token消耗
+29. **多用户Memory并发隔离**⭐🆕：Session ID工厂模式+AsyncMutex串行化+Redis持久化，Demo→生产必考
+30. **工具调用五层纠错体系**⭐🆕：Retry→Zod校验→FewShot→DPO→SFT，完整方法论路线图
+31. **记忆衰退机制设计**⭐🆕：时间衰减(半衰期函数)+相关性过滤(时效性加权)+摘要压缩(主题聚类)三层次
+32. **Human Feedback RL闭环**⭐🆕：显式/隐式/修正/比较四类反馈采集→Agent决策质量Reward→DPO/PPO选型→Online Learning
 
 ### 数据来源
 
@@ -8116,9 +8771,13 @@ Fine-tuning MoE 注意事项：
 | 57 | AG-UI协议详解(16种事件) | fiveyoboy | https://fiveyoboy.com/articles/what-is-ag-ui |
 | 58 | AG-UI实践及原理浅析 | SegmentFault | https://segmentfault.com/a/1190000047197866 |
 | 59 | 2026年3月面20个前端(观察文章) | 技术栈 | https://jishuzhan.net/article/2047219769267519489 |
+| 60 | 阿里云AI应用开发前端一面(6题含Markdown截断) | 牛客 | https://www.nowcoder.com/feed/main/detail/cbefd28f5deb40efb773da3a67c10089 |
+| 61 | JavaGuide·万字拆解MCP协议(Streamable HTTP前端接入) | JavaGuide | https://javaguide.cn/ai/agent/mcp.html |
+| 62 | JavaGuide·万字详解Agent Skills(渐进式披露) | JavaGuide | https://javaguide.cn/ai/agent/skills.html |
+| 63 | AgentGuide高频面试题库(27道带频次统计) | AgentGuide | https://adongwanai.github.io/AgentGuide/interview/hot/ |
 
 ---
 
 > 本题库由自动化爬取任务生成维护，如需更新请运行定时爬取任务。
 > 
-> **版本历史**：v1.0 (2026-04-09, 18题) → v2.0 (2026-04-10, 47题) → v2.1 (2026-04-13, 67题，新增天猫面经5题) → v2.2 (2026-04-13, 70题，新增3道独有题+5道视角互补合并) → v2.3 (2026-04-13, 72题，微信公众号新增2道独有题+3道视角互补合并) → v2.4 (2026-04-14, 76题，新增4道独有题Q73-Q76+3道视角互补合并到Q10/Q30/Q71) → v2.5 (2026-04-14, 81题，小红书新增5道独有题Q77-Q81) → v2.6 (2026-04-14, 81题，全部题目补充📌来源标注+链接) → v2.7 (2026-04-15, 87题，新增6道独有题Q82-Q87+3道视角互补合并到Q31/Q46/Q76) → v2.8 (2026-04-16, 97题，新增10道独有题Q88-Q97+4道视角互补合并到Q6/Q29/Q70/Q55) → v2.9 (2026-04-17, 100题，新增3道独有题Q98-Q100+4道视角互补合并到Q10/Q13/Q42/Q57) → v3.0 (2026-04-20, 106题，新增7道独有题Q101-Q107，Q17待补充) → v3.1 (2026-04-21, 110题，新增4道独有题Q108-Q111+4道增量补充到Q30/Q85/Q93/Q94) → v3.2 (2026-04-22, 123题，新增13道独有题Q112-Q124+高频考点趋势大更新) → v3.3 (2026-04-24, 133题，新增10道独有题Q125-Q134：AG-UI协议3题+WebAssembly端侧推理+流式TTS/TransformStream/多模型对比+AI幻觉前端交互+A/B测试平台+插件化AI框架)
+> **版本历史**：v1.0 (2026-04-09, 18题) → v2.0 (2026-04-10, 47题) → v2.1 (2026-04-13, 67题，新增天猫面经5题) → v2.2 (2026-04-13, 70题，新增3道独有题+5道视角互补合并) → v2.3 (2026-04-13, 72题，微信公众号新增2道独有题+3道视角互补合并) → v2.4 (2026-04-14, 76题，新增4道独有题Q73-Q76+3道视角互补合并到Q10/Q30/Q71) → v2.5 (2026-04-14, 81题，小红书新增5道独有题Q77-Q81) → v2.6 (2026-04-14, 81题，全部题目补充📌来源标注+链接) → v2.7 (2026-04-15, 87题，新增6道独有题Q82-Q87+3道视角互补合并到Q31/Q46/Q76) → v2.8 (2026-04-16, 97题，新增10道独有题Q88-Q97+4道视角互补合并到Q6/Q29/Q70/Q55) → v2.9 (2026-04-17, 100题，新增3道独有题Q98-Q100+4道视角互补合并到Q10/Q13/Q42/Q57) → v3.0 (2026-04-20, 106题，新增7道独有题Q101-Q107，Q17待补充) → v3.1 (2026-04-21, 110题，新增4道独有题Q108-Q111+4道增量补充到Q30/Q85/Q93/Q94) → v3.2 (2026-04-22, 123题，新增13道独有题Q112-Q124+高频考点趋势大更新) → v3.3 (2026-04-24, 133题，新增10道独有题Q125-Q134：AG-UI协议3题+WebAssembly端侧推理+流式TTS/TransformStream/多模型对比+AI幻觉前端交互+A/B测试平台+插件化AI框架) → v3.4 (2026-04-25, 140题，新增7道独有题Q135-Q141：AI接口跨域BFF/流式对话框三层架构/rAF+Token频率优化/MCP工具调用延迟Optimistic UI/多工具防抖状态合并打断/TypeScript AI类型安全/Agentic RAG vs 普通RAG) → v3.5 (2026-04-27, 143题，新增3道独有题Q142-Q144：LangGraph记忆管理/流式Chunk合并算法/Web Worker+AI应用 + 高频考点趋势更新) → v3.6 (2026-04-29, 147题，新增4道独有题Q145-Q148：残缺JSON Tool Call增量解析/Agent多工具异步状态管理/依赖投毒检测/SFT微调数据集收集) → **v3.7 (2026-04-30, 154题，新增7道独有题Q149-Q155：Markdown截断闪烁/MCP Streamable HTTP前端接入/渐进式披露Token优化/多用户Memory并发隔离/工具调用五层纠错体系/记忆衰退机制/Human Feedback RL闭环)**
