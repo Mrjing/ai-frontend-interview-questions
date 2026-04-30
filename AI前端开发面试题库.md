@@ -1,6 +1,6 @@
 # AI 前端开发面试题库
 
-> **版本**: v3.5 | **更新日期**: 2026-04-28 | **题目总数**: 143
+> **版本**: v3.6 | **更新日期**: 2026-04-29 | **题目总数**: 147
 >
 > 本题库整合自掘金、知乎、牛客、CSDN、小红书等平台的最新面经，聚焦AI前端/全栈开发方向。
 >
@@ -33,6 +33,7 @@
   - [1.5 AI流式通信](#15-ai流式通信)
   - [1.5a AI缓存与限流](#15a-ai缓存与限流)
   - [1.6 AI组件与架构设计](#16-ai组件与架构设计)
+  - [1.6a Agent多工具异步状态管理](#16a-agent多工具异步状态管理)
   - [1.7 AI对话上下文与Token优化](#17-ai对话上下文与token优化)
 - [二、AI大模型原理](#二ai大模型原理)
   - [2.1 大模型基础](#21-大模型基础)
@@ -2062,6 +2063,128 @@ function incrementalRender(fullContent: string, frozenLength: number) {
 
 ---
 
+#### Q145: AI流式输出中复杂JSON残缺状态下如何保证UI不崩溃？流式Tool Call的增量解析与渐进渲染
+`tag:SSE/流式输出` `tag:架构设计` `tag:幻觉/安全` `difficulty:hard`
+
+> 📌 来源：[编程导航·卷AI卷算法2026年前端工程师到底在卷什么](https://www.codefather.cn/post/2049060501769453569) + [火山引擎开发者社区](https://developer.volcengine.com/articles/7633724326394806308)
+
+**问题**：在AI流式输出（Streaming）的对话场景中，大模型返回带有代码块和多步工具调用（Tool Call）的复杂JSON块。在流式传输未结束、JSON处于残缺状态时，前端如何保证UI不崩溃，并平滑渲染中间状态？
+
+**参考答案**：
+
+```javascript
+// ====== 流式残缺JSON增量解析器 ======
+
+class StreamJSONParser {
+  constructor() {
+    this.buffer = '';
+    this.completedBlocks = [];  // 已完成解析的代码块/工具调用
+    this.partialBlock = null;    // 当前未闭合的块
+    this.state = 'IDLE';        // IDLE | IN_CODE_BLOCK | IN_TOOL_CALL | IN_TEXT
+  }
+
+  // 增量接收流式token
+  append(chunk) {
+    this.buffer += chunk;
+    this.tryParse();
+  }
+
+  tryParse() {
+    // 策略1：识别已完成的代码块（```...```闭合）
+    const codeBlockRegex = /```[\w]*\n([\s\S]*?)```/g;
+    let match;
+    while ((match = codeBlockRegex.exec(this.buffer)) !== null) {
+      this.completedBlocks.push({
+        type: 'code_block',
+        language: match[0].split('\n')[0].replace('```', '').trim(),
+        content: match[1],
+        complete: true
+      });
+    }
+
+    // 策略2：识别未闭合的代码块（有开```但无闭```）
+    const openCodeIdx = this.buffer.lastIndexOf('```');
+    if (openCodeIdx !== -1) {
+      const afterOpen = this.buffer.slice(openCodeIdx);
+      if (!afterOpen.slice(3).includes('```')) {
+        // 未闭合 → 渲染为"正在生成"的代码块
+        this.partialBlock = {
+          type: 'code_block_streaming',
+          content: afterOpen,
+          complete: false
+        };
+      }
+    }
+
+    // 策略3：识别Tool Call（JSON格式的函数调用）
+    // 工具调用通常有固定schema: {"name":"xxx","arguments":{...}}
+    this.tryParseToolCalls();
+  }
+
+  tryParseToolCalls() {
+    // 尝试匹配完整的tool_call JSON
+    const toolCallRegex = /"name"\s*:\s*"(\w+)"\s*,\s*"arguments"\s*:\s*(\{[^}]*\})/g;
+    // 对残缺JSON使用容错解析
+    // 如果JSON未闭合，尝试补全缺失的括号
+    try {
+      let jsonStr = this.buffer;
+      // 补全缺失的闭合括号
+      const openBraces = (jsonStr.match(/\{/g) || []).length;
+      const closeBraces = (jsonStr.match(/\}/g) || []).length;
+      jsonStr += '}'.repeat(openBraces - closeBraces);
+      const parsed = JSON.parse(jsonStr);
+      if (parsed.name && parsed.arguments) {
+        this.completedBlocks.push({
+          type: 'tool_call',
+          name: parsed.name,
+          args: parsed.arguments,
+          complete: true
+        });
+      }
+    } catch {
+      // JSON不完整，渲染为进行中的工具调用
+      this.partialBlock = {
+        type: 'tool_call_streaming',
+        content: this.buffer,
+        complete: false
+      };
+    }
+  }
+}
+
+// ====== 生成式UI渐进渲染 ======
+
+function StreamingRenderer({ parser }) {
+  return (
+    <ErrorBoundary fallback={<StreamingErrorUI />}>
+      {parser.completedBlocks.map((block, i) => (
+        <CompletedBlock key={i} block={block} />
+      ))}
+      {parser.partialBlock && (
+        <Suspense fallback={<SkeletonBlock />}>
+          <PartialBlock block={parser.partialBlock} />
+        </Suspense>
+      )}
+    </ErrorBoundary>
+  );
+}
+```
+
+**四个核心策略**：
+
+1. **残缺JSON增量解析**：不等待完整JSON，采用增量解析器逐token构建AST，识别已完成的代码块/工具调用段落部分渲染；未闭合片段用占位符或loading状态展示
+2. **生成式UI渐进渲染**：识别流式到达的Tool Call类型，提前渲染对应组件骨架（如代码块先渲染header+语言标识），内容逐步填充
+3. **防御性编程+沙盒隔离**：大模型可能返回不符合预期的组件协议，用ErrorBoundary包裹每个AI渲染区域，单组件崩溃不影响全局；iframe/Web Worker隔离高风险渲染
+4. **复杂状态机设计**：流式输出状态机包含 receiving→parsing→partial_rendering→complete 多个状态，异常状态可回退到最近稳定态
+
+**面试官追问方向**：
+- 如果大模型返回的Tool Call参数格式完全错误（如应该传JSON却传了自然语言），前端怎么处理？
+- 如何在不完整JSON中识别出"这是一个工具调用"而非"这是普通文本"？
+
+**与Q12/Q67/Q118的关系**：Q12讲LLM流式输出的基本处理，Q67讲JSON格式损坏的前端方案（单次请求），Q118讲Chunk合并算法。本题聚焦**流式Tool Call场景下的残缺JSON增量解析与渐进渲染**——是Q12的流式版本+Q67的实时版本+Q118的复杂JSON版本。
+
+---
+
 ### 1.6 AI组件与架构设计
 
 #### Q134: 插件化的AI前端框架如何设计？模型/工具/组件如何动态注册？
@@ -2581,6 +2704,137 @@ function buildContext(messages, newMessage) {
 
 ---
 
+#### Q146: Agent多工具异步中间状态如何在React/Vue中做防抖、状态合并和打断？
+`tag:Agent架构` `tag:并发控制` `tag:架构设计` `difficulty:hard`
+
+> 📌 来源：[编程导航·卷AI卷算法2026年前端工程师到底在卷什么](https://www.codefather.cn/post/2049060501769453569) + [牛客·2026年最新Agent面试](https://www.nowcoder.com/discuss/878709844730003456)
+
+**问题**：一个Agent在后台疯狂调用工具（查天气、查数据库、画图），这个过程中产生的大量异步中间状态，如何在React/Vue中处理？如何做防抖、状态合并和打断？
+
+**参考答案**：
+
+```javascript
+// ====== Agent多工具异步状态管理器 ======
+
+class AgentToolStateManager {
+  constructor() {
+    this.toolStates = new Map();    // toolCallId → state
+    this.abortControllers = new Map(); // toolCallId → AbortController
+    this.stateSnapshot = [];         // 状态快照栈（用于回滚）
+    this.pendingUpdates = [];        // 待合并的状态更新
+    this.rafId = null;               // rAF合并渲染
+  }
+
+  // 注册工具调用
+  registerToolCall(toolCallId, toolName) {
+    const controller = new AbortController();
+    this.abortControllers.set(toolCallId, controller);
+    this.toolStates.set(toolCallId, {
+      id: toolCallId,
+      name: toolName,
+      status: 'running',     // running | completed | failed | cancelled
+      progress: 0,
+      result: null,
+      error: null,
+      startTime: Date.now()
+    });
+    this.scheduleRender();
+  }
+
+  // 工具状态更新（防抖+合并）
+  updateToolState(toolCallId, partial) {
+    const current = this.toolStates.get(toolCallId);
+    if (!current) return;
+
+    // 保存快照用于回滚
+    this.stateSnapshot.push(new Map(this.toolStates));
+
+    // 合并状态更新
+    this.pendingUpdates.push({ toolCallId, ...partial });
+
+    // rAF防抖合并渲染
+    this.scheduleRender();
+  }
+
+  scheduleRender() {
+    if (this.rafId) return; // 已有待执行渲染
+    this.rafId = requestAnimationFrame(() => {
+      this.flushUpdates();
+      this.rafId = null;
+    });
+  }
+
+  flushUpdates() {
+    // 批量合并pending updates
+    for (const update of this.pendingUpdates) {
+      const { toolCallId, ...partial } = update;
+      const current = this.toolStates.get(toolCallId);
+      if (current) {
+        Object.assign(current, partial);
+      }
+    }
+    this.pendingUpdates = [];
+    // 触发React/Vue渲染更新
+    this.notifySubscribers();
+  }
+
+  // 打断所有进行中的工具调用
+  cancelAll() {
+    for (const [id, controller] of this.abortControllers) {
+      controller.abort();
+      const state = this.toolStates.get(id);
+      if (state && state.status === 'running') {
+        state.status = 'cancelled';
+      }
+    }
+    this.scheduleRender();
+  }
+
+  // 回滚到上一个稳定状态
+  rollback() {
+    if (this.stateSnapshot.length > 0) {
+      this.toolStates = this.stateSnapshot.pop();
+      this.scheduleRender();
+    }
+  }
+}
+
+// ====== React Hook 封装 ======
+
+function useAgentToolState() {
+  const [states, setStates] = useState(new Map());
+  const managerRef = useRef(new AgentToolStateManager());
+
+  useEffect(() => {
+    const manager = managerRef.current;
+    manager.onUpdate = (newStates) => setStates(new Map(newStates));
+    return () => manager.cancelAll();
+  }, []);
+
+  return {
+    toolStates: states,
+    registerToolCall: (id, name) => managerRef.current.registerToolCall(id, name),
+    updateToolState: (id, partial) => managerRef.current.updateToolState(id, partial),
+    cancelAll: () => managerRef.current.cancelAll(),
+  };
+}
+```
+
+**四个核心策略**：
+
+1. **状态合并与rAF防抖**：多个工具并发生成中间状态，通过requestAnimationFrame合并渲染，避免短时间多次re-render；同一工具的多次进度更新只保留最新值
+2. **AbortController打断池**：每个工具调用绑定独立AbortController，用户点击"停止"时批量abort所有进行中的fetch；后端配合支持工具级cancel信号
+3. **状态快照与回滚**：Agent每步执行前保存状态快照（immutable），工具失败时可回滚到上一步；类似immer的不可变状态管理
+4. **可视化调度面板**：前端展示工具调用甘特图，用户可查看哪些工具在并行执行、哪些已完成、哪些被跳过
+
+**面试官追问方向**：
+- 如果两个工具的输出存在依赖（工具B需要工具A的结果作为输入），前端如何处理依赖链？
+- 如何在打断后让Agent从断点继续执行而非从头开始？
+
+**与Q138/Q139的关系**：Q138讲Agent工具调用延迟的Optimistic UI优化，Q139讲Agent工具死循环检测与前端可观测。本题聚焦**多工具并行场景下的异步中间状态管理**——是Q138的多工具版本+Q139的状态管理视角。
+
+---
+
 #### Q24: 如何优化Prompt减少Token消耗？
 `tag:Prompt-Engineering` `tag:Token优化` `difficulty:medium`
 
@@ -2930,6 +3184,13 @@ AI Agent是能够感知环境、自主决策并执行动作以达成特定目标
 | Trade-off | 简单但可能出错 | 实用但步骤多 | 质量高但成本大 |
 
 **选择建议**：简单推理用CoT，需外部信息用ReAct，多方案比选用ToT。实际项目中常组合使用。
+
+**👉 ReAct防死循环三板斧**（来源: [fly63·Agent面试全攻略18核心考点](https://fly63.com/article/detial/13716) + [牛客·2026年最新Agent面试](https://www.nowcoder.com/discuss/878709844730003456)）：
+1. **最大步数限制**：通常设15步，超过强制终止并返回当前最佳结果
+2. **重复检测**：连续3次调用相同工具+相同参数，判定为死循环直接退出
+3. **超时控制**：整个任务设最大执行时间（如60秒），超时优雅终止
+
+前端配合：在Agent执行面板展示当前步数/剩余步数、检测到重复时高亮警告用户。
 
 **👉 ReAct vs Tool Calling核心区别**（来源: [微信公众号·ReAct面试5题灵魂深处](https://mp.weixin.qq.com/s?src=11&timestamp=1777015861&ver=6679&signature=SZveegiqOw2cXrCWF3bj5WuRsEBqEHfQS5t4*5g4465yNzhj7skAq6hxSLengR567*1WEko0Alcs0yGEHSlt9cb*uOtwubM7AKvw5qCByqv6pDJcVvly-*M9EJC9CfOo&new=1)）：
 
@@ -4207,6 +4468,133 @@ def act_node(state: AgentState) -> AgentState:
 
 ### 3.2 安全与对齐
 
+#### Q147: AI生成代码的依赖投毒检测与安全审查清单
+`tag:幻觉/安全` `tag:AI协作` `difficulty:medium`
+
+> 📌 来源：[技术栈·2026年前端面试题及干货](https://jishuzhan.net/article/2038070957852655618) + [编程导航·卷AI卷算法2026年前端](https://www.codefather.cn/post/2049060501769453569)
+
+**问题**：使用AI生成代码时，如何审查安全隐患？特别是如何检测AI引入的依赖投毒（phantom dependency/package hallucination）？
+
+**参考答案**：
+
+**1. Prompt约束阶段**：
+
+```javascript
+// 构建安全的AI代码生成Prompt
+function buildSafeCodePrompt(requirement) {
+  return `
+你是一位资深前端架构师，根据以下业务场景生成代码。
+
+业务场景：${requirement}
+
+约束条件：
+- 禁止使用dangerouslySetInnerHTML
+- 禁止安装任何npm包（如需引入第三方库，只允许使用以下已审核的包：react, lodash, dayjs）
+- 所有API调用必须经过BFF层，禁止直接在前端调用外部API
+- 禁止在代码中硬编码任何密钥、token或敏感信息
+- 生成的组件必须包含PropTypes或TypeScript类型定义
+  `;
+}
+```
+
+**2. 依赖投毒检测**：
+
+```javascript
+// AI代码依赖安全审查器
+class DependencyAuditor {
+  constructor(projectDeps) {
+    this.allowedDeps = new Set(Object.keys(projectDeps)); // 项目已有依赖白名单
+  }
+
+  async audit(generatedCode) {
+    const issues = [];
+
+    // 提取AI代码中的import语句
+    const importRegex = /import\s+.*?\s+from\s+['"]([^'"]+)['"]/g;
+    const imports = [];
+    let match;
+    while ((match = importRegex.exec(generatedCode)) !== null) {
+      imports.push(match[1]);
+    }
+
+    for (const pkg of imports) {
+      const pkgName = pkg.startsWith('@') ? pkg.split('/').slice(0, 2).join('/') : pkg.split('/')[0];
+
+      // 检查1：Phantom Dependency（AI幻觉出的不存在的包）
+      if (!this.allowedDeps.has(pkgName)) {
+        const exists = await this.checkNpmRegistry(pkgName);
+        if (!exists) {
+          issues.push({
+            severity: 'CRITICAL',
+            type: 'phantom_dependency',
+            package: pkgName,
+            message: `AI引入了不存在的npm包"${pkgName}"，这是大模型幻觉产生的phantom dependency`
+          });
+        } else {
+          // 检查2：Typosquatting（拼写近似欺骗）
+          const similar = this.findSimilarPackage(pkgName, this.allowedDeps);
+          if (similar && similar.distance <= 2) {
+            issues.push({
+              severity: 'HIGH',
+              type: 'typosquatting',
+              package: pkgName,
+              message: `"${pkgName}"可能是对"${similar.name}"的typosquatting攻击，下载量：${similar.weeklyDownloads}`
+            });
+          }
+
+          // 检查3：未声明的依赖（AI私自引入的新包）
+          issues.push({
+            severity: 'MEDIUM',
+            type: 'undeclared_dependency',
+            package: pkgName,
+            message: `AI引入了项目未声明的依赖"${pkgName}"，需人工审核`
+          });
+        }
+      }
+    }
+
+    // 检查4：postinstall脚本注入
+    if (generatedCode.includes('postinstall')) {
+      issues.push({
+        severity: 'CRITICAL',
+        type: 'postinstall_injection',
+        message: 'AI生成的package.json包含postinstall脚本，可能执行恶意命令'
+      });
+    }
+
+    // 检查5：硬编码敏感信息
+    const secretPatterns = [/sk-[a-zA-Z0-9]{20,}/, /key-[a-zA-Z0-9]+/, /token.*[:=]\s*['"][^'"]{10,}/];
+    for (const pattern of secretPatterns) {
+      if (pattern.test(generatedCode)) {
+        issues.push({
+          severity: 'CRITICAL',
+          type: 'secret_leak',
+          message: 'AI代码中可能包含硬编码的密钥或token'
+        });
+      }
+    }
+
+    return issues;
+  }
+
+  async checkNpmRegistry(pkgName) {
+    try {
+      const res = await fetch(`https://registry.npmjs.org/${pkgName}`, { method: 'HEAD' });
+      return res.ok;
+    } catch { return false; }
+  }
+}
+```
+
+**3. 权限绕过审查**：
+- AI可能生成"看起来正确但跳过了中间件"的代码
+- 重点审查鉴权逻辑是否每层都生效（路由层→中间件层→组件层→API层）
+- 用AST解析检查是否所有API调用都经过了鉴权装饰器/HOC
+
+**与Q7/Q10/Q45的关系**：Q7讲AI生成代码审查清单（通用流程），Q10讲确保AI代码质量（运行时），Q45讲Agent安全风险（含供应链污染/依赖投毒概念）。本题聚焦**AI特有的依赖投毒检测和phantom dependency自动化审查**——是Q7的自动化检测版本+Q45依赖投毒的具体工程方案。
+
+---
+
 #### Q45: Agent可能产生哪些安全风险？
 `tag:幻觉/安全` `tag:Agent架构` `difficulty:hard`
 
@@ -4236,6 +4624,17 @@ def act_node(state: AgentState) -> AgentState:
 3. **上下文沙箱**：重置关键状态
 4. **红队测试**：定期用攻击payload测试
 5. **语义检测模型识别隐蔽攻击**
+
+**👉 四层纵深防御体系**（来源: [fly63·Agent面试全攻略18核心考点](https://fly63.com/article/detial/13716)）：
+
+原则：没有单一技术足够，必须组合使用。
+
+| 层级 | 策略 | 具体措施 |
+|------|------|---------|
+| **第1层：数据/指令分离** | 结构化隔离 | 外部内容放在明确标记的数据区域（如XML标签`<external_data>`），LLM被指示只对`<instruction>`标签内的指令执行 |
+| **第2层：输入过滤** | 模式检测 | 检测"忽略之前指令"、"you are now"等可疑模式；对工具返回内容做sanitization |
+| **第3层：模板隔离** | 构建安全 | 用户输入永远不直接拼入System Prompt，必须经过转义/编码后插入指定slot |
+| **第4层：上下文标记** | 角色标注 | 明确区分外部数据（`[EXTERNAL]`标记）和系统指令（`[SYSTEM]`标记），模型被训练为不执行外部数据中的指令 |
 
 **👉 间接提示注入专项防范**（来源: [腾讯云·OpenClaw面试八股文](https://cloud.tencent.com/developer/article/2654860)）：
 间接注入比直接注入更危险——攻击载体不是用户输入，而是Agent读取的外部数据（文件、网页、API返回）。防范需额外关注：
@@ -4617,6 +5016,18 @@ axios.interceptors.response.use(
 - **多Agent协作选CrewAI**：开箱即用的角色分工机制
 - **大厂自研**：对安全、可观测性、性能有极致要求时
 
+**👉 2026年厂商SDK崛起趋势**（来源: [牛客·2026年最新Agent面试](https://www.nowcoder.com/discuss/878709844730003456)）：
+
+模型厂商自家Agent SDK强势崛起，正在改变框架选型格局：
+
+| SDK | 厂商 | 核心特点 | 适用场景 |
+|-----|------|---------|---------|
+| **Claude Agent SDK** | Anthropic | 内置文件系统/Bash/Web Search/Subagent/Memory/上下文压缩，原生MCP | 编码/工程类Agent，SWE-bench榜首方案底座 |
+| **OpenAI Agents SDK** | OpenAI | 极简Python SDK，Agent+Handoff+Guardrails+Tracing | OpenAI生态/简洁场景 |
+| **Mastra** | 社区 | TypeScript生态首选，工作流+RAG+评估一体 | JS/TS项目 |
+
+**LangChain份额下滑**：LangChain的"重抽象+频繁破坏式更新"使其在生产侧份额下滑，常见做法是用LangGraph做状态机骨架+厂商SDK做具体能力调度。实际中建议优先用厂商原生SDK（生态绑定+工具丰富），需要跨模型时再用LangGraph抽象层。
+
 **选型决策树**：
 ```
 任务需要多步推理？ → 否 → 用LangChain
@@ -4954,6 +5365,87 @@ async function agentWrite(agentId: string, key: string, value: unknown) {
 ```
 
 **与Q109/Q110的区别**：Q109讲多Agent协作的模式与死锁/目标冲突（Agent间协作问题），Q110讲代码审查场景的角色分工（特定场景实践），本题聚焦**前端状态层面的并发冲突**——是前端工程师在多Agent架构中的独特职责。
+
+---
+
+#### Q148: Agent微调（SFT）的数据集如何收集？LoRA训练策略是什么？
+`tag:Agent架构` `tag:大模型原理` `difficulty:hard`
+
+> 📌 来源：[牛客·2026年最新Agent面试13题](https://www.nowcoder.com/discuss/878709844730003456)
+
+**问题**：如何为Agent进行微调（SFT）？数据集如何收集？训练策略是什么？
+
+**参考答案**：
+
+**1. 为什么需要Agent微调？**
+
+通用LLM虽然支持Function Calling，但在特定业务场景中准确率不够：工具调用时机判断错误、参数格式不规范、多工具编排逻辑不合理。微调的核心目标是提升工具调用准确率和指令遵循能力。
+
+**2. 数据集收集方法**（四种主流方法，按质量/成本排序）：
+
+| 方法 | 数据格式 | 质量 | 成本 | 适用场景 |
+|------|---------|------|------|---------|
+| 人工标注 | (query, thought, tool_call, tool_result, answer)五元组 | ★★★★★ | 极高 | 核心业务场景、少量高优数据 |
+| 强模型蒸馏 | 用GPT-5/Claude Opus生成多样化工具调用场景 | ★★★★ | 中 | 大规模数据生成+人工审核 |
+| 真实日志挖掘 | 从线上Agent成功日志中抽取（rejection sampling过滤失败轨迹） | ★★★★ | 低 | 已有线上Agent的团队 |
+| Self-Instruct/Agent-FLAN | 模型在沙盒中自主探索工具调用场景，RLVR过滤错误轨迹 | ★★★ | 低 | 学术研究、冷启动 |
+
+```python
+# 数据集格式示例（五元组）
+{
+  "messages": [
+    {"role": "system", "content": "你是一个客服助手，可以查询订单、退款、转人工..."},
+    {"role": "user", "content": "我想查一下订单123456的物流信息"},
+    {"role": "assistant", "content": null,
+     "tool_calls": [{
+       "type": "function",
+       "function": {
+         "name": "query_logistics",
+         "arguments": "{\"order_id\": \"123456\"}"
+       }
+     }]},
+    {"role": "tool", "content": "{\"status\": \"运输中\", \"location\": \"北京分拣中心\"}"},
+    {"role": "assistant", "content": "您的订单123456目前正在运输中，最新位置在北京分拣中心，预计明天送达。"}
+  ]
+}
+```
+
+**3. 关键数据质量要点**：
+- **数据多样性**：覆盖各种工具组合和边界情况（单工具/多工具/不需要工具）
+- **包含负样本**：用户问题不需要调用工具时，模型应直接回答而非强行调用
+- **参数格式严格正确**：JSON Schema约束的参数类型、必填字段必须准确
+- **多轮对话场景**：包含上下文依赖的工具调用（"帮我查一下"→需要从上文推断查什么）
+
+**4. LoRA/QLoRA训练策略**：
+
+```python
+# LoRA微调配置（7B-14B模型）
+from peft import LoraConfig, get_peft_model
+
+lora_config = LoraConfig(
+    r=16,                    # LoRA秩（常用8-64）
+    lora_alpha=32,           # 缩放因子（通常2*r）
+    target_modules=[         # 只微调注意力层
+        "q_proj", "v_proj", "k_proj", "o_proj"
+    ],
+    lora_dropout=0.05,
+    task_type="CAUSAL_LM"
+)
+
+# 关键训练技巧
+# 1. loss只算tool_call和answer部分（忽略system prompt和user input）
+# 2. 使用mask防止模型学习"复制用户问题"
+# 3. 学习率: 2e-4（LoRA）/ 1e-4（QLoRA）
+# 4. 训练轮数: 3-5 epochs，避免过拟合
+# 5. 评估指标: 工具调用准确率、参数格式正确率、拒绝率（不该调时不调）
+```
+
+**5. 前端工程师的视角**：
+- 前端可以负责**数据标注工具**的开发（可视化工具调用编辑器）
+- 前端可以收集**用户反馈数据**（工具调用结果的👍👎按钮），形成训练数据闭环
+- 前端可以构建**模型效果对比面板**（A/B测试不同微调版本的工具调用准确率）
+
+**与Q97的关系**：Q97讲Agent框架选型（LangGraph/CrewAI等应用层框架），本题讲Agent微调（模型层优化）——是从"框架"到"模型"的纵深考察。
 
 ---
 
