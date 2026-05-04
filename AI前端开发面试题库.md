@@ -1,6 +1,6 @@
 # AI 前端开发面试题库
 
-> **版本**: v3.7 | **更新日期**: 2026-04-30 | **题目总数**: 154
+> **版本**: v3.8 | **更新日期**: 2026-05-04 | **题目总数**: 162
 >
 > 本题库整合自掘金、知乎、牛客、CSDN、小红书等平台的最新面经，聚焦AI前端/全栈开发方向。
 >
@@ -283,6 +283,42 @@ class AIServiceFallback {
   }
 }
 ```
+
+---
+
+#### Q157: 设计智能客服Agent系统
+`tag:Agent架构` `tag:RAG` `tag:幻觉/安全` `tag:架构设计` `difficulty:hard`
+
+> 📌 来源：[掘金·AI Agent岗面试复盘3个Offer](https://juejin.cn/post/7625576464485842979)
+
+**问题**：设计一个面向企业客户的智能客服Agent，要求能回答产品问题、处理售后、对接工单系统，你会怎么设计？请说明架构分层、记忆设计、幻觉防控和稳定性保障。
+
+**参考答案**：
+
+**五层架构设计：**
+
+1. **接入层**：对接多渠道（网页、APP、公众号、企微）
+2. **对话管理层**：上下文管理、多轮对话状态跟踪(DST)、意图识别
+3. **Agent核心层**：规划、工具调用、反思、记忆
+4. **工具层**：知识库检索、工单系统API、用户信息查询、物流查询
+5. **输出管控层**：敏感词过滤、内容审核、话术规范
+
+**记忆设计：**
+- 短期记忆：对话上下文存Redis，设置过期时间
+- 长期记忆：用户画像、历史问题总结存向量数据库，需要时召回
+
+**幻觉防控（四层防御）：**
+1. RAG检索增强：所有回答基于知识库内容，不允许胡编
+2. 置信度校验：让LLM自判信心，没信心转人工
+3. 事实核查：输出与检索原文比对，不一致打回重生成
+4. 人工复核：关键场景（金融/医疗）必须过人工
+
+**稳定性保障：**
+- 超时处理：LLM推理慢设超时，超时给友好提示
+- 降级策略：大模型挂了降级到规则匹配或转人工
+- 监控告警：跟踪每步成功率、失败原因，指标异常立即告警
+
+**与Q30/Q101的关系**：Q30讲Agent工作模式(ReAct/Plan-and-Execute等)，Q101讲Workflow vs Agent选型，本题从**系统设计**角度给出完整的五层架构和幻觉/稳定性保障——是从"模式理解"到"系统落地"的跨越。
 
 ---
 
@@ -2185,6 +2221,39 @@ function StreamingRenderer({ parser }) {
 
 ---
 
+#### Q156: AI对话高频流式返回场景的前端性能问题与优化
+`tag:SSE/流式输出` `tag:性能监控` `tag:Markdown渲染` `tag:虚拟滚动/长列表` `difficulty:hard`
+
+> 📌 来源：[字节前端AI对话流式返回性能问题](https://yeyulingfeng.com/571584.html)
+
+**问题**：AI对话这种高频流式返回场景，前端会遇到哪些性能问题？如何系统性地优化？
+
+**参考答案**：
+
+核心洞察：流式场景的性能问题不是"单次渲染太重"，而是"持续更新太频繁"，每次更新都不一定重，但更新发生得太频繁导致"持续抖动"。
+
+**六大性能问题：**
+
+1. **流式内容更新太频繁 → 高频重渲染**：后端每吐一个token就setState一次，文本不断变长，触发整棵组件树反复render
+2. **长消息越来越长 → 渲染成本递增**：AI回答可能几千字带代码/表格，开头顺畅越往后越卡
+3. **Markdown/代码高亮/富文本解析放大压力**：每收到一小段流式内容就重新parse全文，代码块高亮尤其昂贵
+4. **消息列表变长 → 整个对话区域越来越重**：滚动掉帧、白屏、自动滚动与手动滚动打架
+5. **滚动联动体验问题**：用户上翻时被拽回底部、复制代码时位置被顶掉、页面持续细小抖动
+6. **状态拆分不当 → 流式更新搅动整页**：消息状态、流式状态、会话状态全混在一个大对象里
+
+**六层优化方案：**
+
+1. **降低流式更新频率**：做合并、缓冲、按时间片更新，不让UI更新频率等于服务端吐流频率
+2. **正在生成消息与历史消息隔离**：历史消息保持稳定，不跟着当前流反复更新
+3. **富文本链路分阶段处理**：先渲染纯文本→Markdown延后解析→代码高亮按块处理→重内容区域懒执行
+4. **长列表虚拟化或折叠策略**：历史消息虚拟滚动或折叠
+5. **滚动策略明确**：定义自动滚到底/尊重用户浏览/暂停联动的时机
+6. **状态边界拆清楚**：当前消息流、消息列表、会话级状态、输入区状态分开管理
+
+**与Q11/Q15的关系**：Q11讲SSE vs WebSocket选型，Q15讲Markdown渲染策略，本题从**性能优化**角度系统覆盖流式场景的六大问题和六层优化——是流式通信从"功能实现"到"性能攻坚"的深化。
+
+---
+
 ### 1.6 AI组件与架构设计
 
 #### Q134: 插件化的AI前端框架如何设计？模型/工具/组件如何动态注册？
@@ -3616,6 +3685,125 @@ Agent发起工具调用 → 后端发送tool_confirmation事件(AG-UI)
 
 ---
 
+#### Q158: Agent的反思/自我纠正（Reflection/Self-Correction）模式
+`tag:Agent架构` `tag:Prompt-Engineering` `tag:架构设计` `difficulty:medium`
+
+> 📌 来源：[CSDN·Agent面试全攻略](https://blog.csdn.net/Libra1313/article/details/157649169)
+
+**问题**：什么是Agent的反思/自我纠正（Reflection/Self-Correction）模式？如何实现？Reflexion架构是什么？
+
+**参考答案**：
+
+Reflection/Self-Correction是提升Agent成功率最有效的模式之一：
+
+**核心机制：**
+1. Agent生成输出后，由另一个（或同一个）Agent扮演批评者（Critic）
+2. 检查输出是否符合约束条件
+3. 提供反馈让前者迭代修改
+
+**Reflexion架构：**
+- 记录"失败轨迹"作为长短期记忆
+- Agent在失败后回顾之前的错误路径
+- 避免重复同样的错误，实现"从失败中学习"
+
+**代码实现思路（TypeScript）：**
+```typescript
+interface ReflectionResult {
+  passed: boolean;
+  feedback: string;
+  suggestions: string[];
+}
+
+async function reflectWithCorrection(
+  agent: Agent,
+  task: string,
+  maxRetries: number = 3
+): Promise<string> {
+  let output = await agent.execute(task);
+  for (let i = 0; i < maxRetries; i++) {
+    const reflection = await critic.evaluate(output, task);
+    if (reflection.passed) return output;
+    output = await agent.execute(task, {
+      previousOutput: output,
+      feedback: reflection.feedback,
+      failureHistory: reflection.suggestions
+    });
+  }
+  return output;
+}
+```
+
+**与ReAct的区别：** ReAct是"边想边做"，Reflection是"做完后检查再改"。两者可以组合：ReAct负责执行，Reflection负责校验。
+
+**与Q30的关系**：Q30提及Reflexion但无详细展开，本题专门讲解Reflection模式的机制、实现和与ReAct的互补关系。
+
+---
+
+#### Q159: Workflow vs Agent设计权衡：2026工程趋势
+`tag:Agent架构` `tag:模式设计` `tag:架构设计` `difficulty:medium`
+
+> 📌 来源：[CSDN·Agent面试全攻略](https://blog.csdn.net/Libra1313/article/details/157649169)
+
+**问题**：对比"工作流（Workflows）"与"自主智能体（Autonomous Agents）"的优劣。2026年的工程趋势是什么？
+
+**参考答案**：
+
+| 维度 | Workflows | Autonomous Agents |
+|------|-----------|-------------------|
+| 定义 | 通过DAG或状态机硬编码路径 | 由LLM决定循环次数和工具调用 |
+| 优点 | 高可靠性、结果可预期 | 灵活性极高 |
+| 缺点 | 无法处理未预见场景 | 可能产生不可控行为 |
+| 适用场景 | 报销审批、标准化客服 | 开放式研究、代码编写 |
+| 成本 | 可控（固定步数） | 不可控（可能无限循环） |
+| 可解释性 | 强（路径可追踪） | 弱（决策不透明） |
+
+**2026工程趋势：用Workflow约束Agent（混合架构）**
+- 在框架定义的路径内给予Agent局部决策权
+- 例如：报销审批流程用Workflow定义整体路径，但在"金额审核"节点允许Agent自主调用工具查询
+- 核心思想：**结构化流程保底，局部自主性提效**
+
+**LangGraph实现：**
+- 传统工作流的边是固定的
+- LangGraph的边可以是条件边（Conditional Edges），由LLM输出决定下一步走向
+- 支持循环（Cycles），这是Agent能不断尝试直到成功的核心
+
+**与Q101的关系**：Q101讲Workflow vs Agent的基础对比和混合架构概念，本题补充2026工程趋势、LangGraph条件边实现和"结构化流程保底+局部自主性提效"的设计哲学。
+
+---
+
+#### Q160: Agent常见失败场景与应对策略
+`tag:Agent架构` `tag:幻觉/安全` `tag:架构设计` `difficulty:medium`
+
+> 📌 来源：[掘金·AI Agent岗面试复盘3个Offer](https://juejin.cn/post/7625576464485842979) + [CSDN·Agent面试全攻略](https://blog.csdn.net/Libra1313/article/details/157649169)
+
+**问题**：Agent最常见的失败场景有哪些？如何系统性地解决？
+
+**参考答案**：
+
+**三大失败场景：**
+
+1. **工具调用失败**
+   - 问题：LLM生成的参数不对、格式不对、调用后结果不符合预期
+   - 解法：做参数校验层 + 格式不合法让LLM重新生成 + 加失败重试 + 关键调用做人工兜底
+
+2. **上下文溢出**
+   - 问题：对话轮数多，Context超限，Agent忘了之前在干嘛
+   - 解法：上下文压缩提取关键信息 + 定期summarize + 用sliding window控制长度
+
+3. **目标漂移**
+   - 问题：执行过程中偏离原始目标，越跑越偏
+   - 解法：每一步做目标对齐 + 定期反思总结 + 必要时重新规划
+
+**工程实践要点：**
+- 参数校验层（Schema Validation）是第一道防线
+- 重试机制需要设置上限，避免无限重试
+- 人工兜底(Human-in-the-loop)是关键场景的安全网
+- 目标漂移需要设计"目标对齐检查点"
+
+**与Q138/Q139的关系**：Q138讲Agent工具调用延迟，Q139讲Agent死循环，本题从**失败场景**角度系统覆盖工具调用失败、上下文溢出、目标漂移三大问题及其应对策略。
+
+---
+
 ### 2.3 RAG（检索增强生成）
 
 #### Q33: RAG的完整流程是什么？每个环节可能遇到什么问题？
@@ -4103,6 +4291,74 @@ RAG检索返回的多个Chunk可能包含相互矛盾的信息，需要系统化
    - 权限隔离：不同用户/租户只能检索授权文档
    - 防Prompt Injection：输入过滤+输出校验
    - 敏感信息过滤：PII检测+脱敏
+
+---
+
+#### Q161: RAG高级检索优化：Chunk冲突、权限隔离与准确度提升
+`tag:RAG` `tag:向量检索` `tag:幻觉/安全` `tag:架构设计` `difficulty:hard`
+
+> 📌 来源：[CSDN·Agent面试全攻略](https://blog.csdn.net/Libra1313/article/details/157649169)
+
+**问题**：在企业级RAG系统中，如何解决检索Chunk互相冲突的问题？如何实现知识库的权限隔离？如何系统性提升RAG问答准确度？
+
+**参考答案**：
+
+**一、Chunk冲突解决（三种策略）：**
+1. **元数据加权**：根据文档的实时性、权威性（部门等级）进行权重排序
+2. **Multi-Agent Debate**：让不同Agent持不同Chunk进行对比，识别冲突点并反馈给用户
+3. **引用溯源**：强制要求输出附带Source链接，让用户做最后校验
+
+**二、RAG权限隔离：**
+- 核心策略：在向量数据库中，每个Embedding向量附带ACL（访问控制列表）元数据
+- Agent触发检索请求时，强制将"当前用户信息"作为Filter注入检索语句
+- 确保在向量检索阶段就完成物理隔离，而不是靠提示词拦截
+- **关键原则**：权限过滤必须在检索层完成，而非在Prompt层拦截
+
+**三、RAG准确度提升（三层组合拳）：**
+1. **深度解析层：Layout-Aware Parsing**
+   - 使用Layout Analysis模型（DocLayout-YOLO/Unstructured），将文档识别为标题/正文/表格/图片/列表
+   - 按标题层级（H1-H4）语义分块，而非按字符数
+2. **检索增强层：Multi-Stage Retrieval**
+   - 混合检索（Hybrid Search）：向量检索（语义）+ BM25（关键词）
+   - 重排序（Reranking）：使用Cross-Encoder模型（BGE-Reranker）对初筛Top-50精排
+   - 查询扩展（Query Expansion）：Agent自动生成3个同义问题并行检索
+3. **生成校验层：Self-Correction (Self-RAG)**
+   - 验证节点：判断"检索内容是否足以回答问题？"不够则重新检索
+   - 判断"答案中是否有检索结果里没提到的内容？"防止幻觉
+
+**与Q121/Q122的关系**：Q121讲Agentic RAG的规划能力，Q122讲10万用户RAG系统五维度架构设计，本题深度补充Chunk冲突解决、权限隔离ACL机制、Layout-Aware Parsing和Self-RAG等高级优化——是从"基础架构"到"工程深化"的演进。
+
+---
+
+#### Q162: 多模态RAG：图片、表格在检索增强生成中的处理
+`tag:RAG` `tag:多模态` `tag:向量检索` `tag:架构设计` `difficulty:hard`
+
+> 📌 来源：[CSDN·Agent面试全攻略](https://blog.csdn.net/Libra1313/article/details/157649169)
+
+**问题**：在RAG系统中，如何处理文档中的图片和表格？如何确保LLM在回答时正确插入图片？大表格导致上下文溢出怎么办？
+
+**参考答案**：
+
+**一、表格处理：**
+- 解析阶段：不要将表格转为纯文本，解析为Markdown或HTML格式
+- 摘要索引：为每个表格生成自然语言摘要，摘要存入向量库；检索时通过摘要定位表格，生成时喂完整Markdown表格
+- 前端渲染：直接渲染LLM输出的Markdown表格
+
+**二、图片处理（多模态索引法）：**
+1. Image Captioning：使用多模态模型（GPT-4o-mini/Qwen-VL）为图片生成详细描述
+2. 存入向量库：将"图片描述 + 图片ID + 所在页码"存入向量库
+3. 检索逻辑：匹配图片描述
+4. 回显机制：使用特定占位符（如`[IMAGE_ID: 123]`），前端解析占位符从OSS拉取图片渲染
+
+**三、大表格优化（Select-then-Read策略）：**
+1. Agent先通过表格Schema（表头信息）和摘要判断该表是否包含所需数据
+2. 如果是，Agent生成查询指令（类似SQL/Python代码），只提取相关行列
+3. 将精简子表喂给生成节点，减少干扰信息
+
+**四、跨页关联（滑动窗口+跨页聚合）：**
+- 维护滑动窗口，通过布局距离计算，将邻近文本块作为图片的"上下文元数据"共同存储
+
+**与现有题目的关系**：全新题目，填补题库在**多模态RAG**方向的空白——图片索引、表格摘要、Select-then-Read策略、跨页聚合均为面试高频考点。
 
 ---
 
@@ -5876,6 +6132,48 @@ function AIChatWithABTest() {
 - 使用贝叶斯方法时，可注入历史数据作为先验分布，加速收敛
 
 **与Q85/Q87的关系**：Q85讲Agent可观测性的Trace链路追踪，Q87讲Agent最小评估体系的4组指标，本题讲如何在生产环境中做**对比实验**——是评估体系从"离线评测"到"在线验证"的延伸。
+
+---
+
+#### Q163: Agent性能量化评估体系与影子测试
+`tag:Agent架构` `tag:性能监控` `tag:架构设计` `difficulty:medium`
+
+> 📌 来源：[CSDN·Agent面试全攻略](https://blog.csdn.net/Libra1313/article/details/157649169)
+
+**问题**：如何量化一个Agent的性能？有哪些核心评估指标？什么是影子测试（Shadow Testing）？
+
+**参考答案**：
+
+**核心评估指标：**
+
+| 指标 | 说明 | 前端关注点 |
+|------|------|-----------|
+| 任务成功率 (Success Rate) | 最核心的指标 | 用户任务完成率 |
+| 平均推理步数 (Avg Steps) | 步数越少成本越低、响应越快 | 首字延迟/总延迟 |
+| 工具调用准确率 (Tool Call Accuracy) | 衡量工具使用的精确度 | 工具调用失败率 |
+| Token消耗 | 每次任务平均Token数 | 成本控制/前端缓存 |
+| 用户满意度 (NPS) | 用户主观反馈 | 评分组件/反馈机制 |
+
+**影子测试（Shadow Testing）：**
+- 在生产环境并行跑新旧Agent逻辑，对比输出差异
+- 不影响线上用户，仅对比分析
+- 用于评估新版本Agent是否可以安全上线
+
+**前端实现评估面板：**
+```typescript
+interface AgentMetrics {
+  successRate: number;      // 0-1
+  avgSteps: number;         // 平均推理步数
+  toolCallAccuracy: number; // 工具调用准确率
+  avgTokenCost: number;     // 平均Token消耗
+  avgLatency: number;       // 平均响应延迟(ms)
+  ttft: number;            // 首字延迟(ms)
+}
+```
+
+**2026趋势：** 从人工评估转向LLM-as-a-Judge自动化评测，构建Edge Cases测试库，模型升级/Prompt变动后自动全量测试。
+
+**与Q85/Q87/Q139的关系**：Q85讲可观测性与成本控制的Trace链路追踪，Q87讲Agent最小评估体系的4组指标，Q139讲Agent工具死循环的前端可观测，本题从**量化评估**角度补全评估指标体系、影子测试方法和LLM-as-a-Judge趋势——是从"可观测"到"可评估"的闭环。
 
 ---
 
